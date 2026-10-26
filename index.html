@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Orbis — Circular Circuit Generator</title>
+  <meta name="description" content="Generative circular-circuit designs for laser cutting, plotting and print." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <span class="name">ORBIS</span>
+      <span class="tag">circular circuit generator</span>
+    </div>
+    <div class="top-actions">
+      <button id="btnRandom" title="Randomize unlocked parameters (R)">Randomize</button>
+      <button id="btnMutate" title="Nudge unlocked parameters (M)">Mutate</button>
+      <button id="btnSeed" title="New seed (N)">New Seed</button>
+      <span class="sep"></span>
+      <button id="btnUndo" class="icon" title="Undo (Ctrl+Z)">↶</button>
+      <button id="btnRedo" class="icon" title="Redo (Ctrl+Shift+Z)">↷</button>
+      <button id="btnAnimate" class="icon" title="Animate rings (Space)">▶</button>
+    </div>
+  </div>
+  <div class="accent-bar"></div>
+
+  <main class="layout">
+    <section class="frame viewport-frame">
+      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+      <div class="viewport" id="viewport">
+        <div class="scene"><div class="stage" id="stage"><div class="grid"></div></div></div>
+        <div class="hud hud-tl">
+          <label class="chip select">
+            <select id="view" aria-label="View">
+              <option value="top">Top</option>
+              <option value="tilt">Tilt</option>
+              <option value="exploded">Exploded</option>
+            </select>
+          </label>
+        </div>
+        <div class="hud hud-tr stats" id="stats"></div>
+        <div class="hud hud-bl hint">drag to orbit · scroll to zoom · dbl-click to reset</div>
+        <button class="hud hud-br mode-label" id="modeLabel" title="Cycle render mode (V)">LINE WORK</button>
+      </div>
+    </section>
+
+    <aside class="frame panel">
+      <div class="panel-head">
+        <span class="panel-title">Generator</span>
+        <span class="panel-file" id="fileName">orbis.svg</span>
+      </div>
+
+      <div class="row-split">
+        <label class="field"><span>Palette</span><select id="palette"></select></label>
+        <label class="field"><span>Render</span><select id="mode"></select></label>
+      </div>
+
+      <div class="row-split presets">
+        <label class="field grow"><span>Preset</span><select id="preset"></select></label>
+        <button id="btnSavePreset" title="Save current as preset">Save</button>
+        <button id="btnDeletePreset" title="Delete selected user preset">Delete</button>
+      </div>
+
+      <div id="controls"></div>
+
+      <div class="export">
+        <div class="export-title">Export</div>
+        <div class="export-grid">
+          <button data-export="cut-svg" title="Laser-ready SVG in mm — CUT (red) and ENGRAVE (blue) layers">SVG · Cut</button>
+          <button data-export="dxf" title="DXF R12 in mm — CUT / ENGRAVE layers">DXF</button>
+          <button data-export="art-svg" title="Styled SVG as shown">SVG · Art</button>
+          <button data-export="png" title="2048×2048 PNG">PNG</button>
+          <button data-export="json" title="Parameters as JSON">JSON</button>
+          <button data-export="link" title="Copy a shareable link">Copy Link</button>
+        </div>
+        <label class="import">Import JSON<input type="file" id="importFile" accept="application/json,.json" /></label>
+      </div>
+    </aside>
+
+    <section class="frame variations-frame">
+      <div class="panel-head">
+        <span class="panel-title">Variations</span>
+        <button id="btnShuffle" class="ghost" title="New variations (X)">Shuffle ⟳</button>
+      </div>
+      <div class="variations" id="variations"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span><kbd>R</kbd> randomize</span><span><kbd>M</kbd> mutate</span><span><kbd>N</kbd> seed</span>
+    <span><kbd>Space</kbd> animate</span><span><kbd>V</kbd> render</span><span><kbd>C</kbd> view</span>
+    <span><kbd>X</kbd> shuffle</span><span><kbd>Ctrl Z</kbd> undo</span>
+  </footer>
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>

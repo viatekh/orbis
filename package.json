@@ -1,0 +1,11 @@
+{
+  "name": "orbis",
+  "version": "0.1.0",
+  "description": "Generative circular-circuit designs for laser cutting, plotting and print",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node serve.js",
+    "test": "node --test test/*.test.js"
+  }
+}
