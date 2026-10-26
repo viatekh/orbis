@@ -12,6 +12,7 @@ export const GROUPS = [
   { id: 'notches', label: 'Notches & Edges' },
   { id: 'cutouts', label: 'Cutouts' },
   { id: 'traces', label: 'Traces' },
+  { id: 'fab', label: 'Fabrication' },
 ];
 
 // `rand` is the range used by Randomize — narrower than min/max so random
@@ -42,6 +43,10 @@ export const PARAMS = [
   { key: 'hairlines', label: 'Hairlines', group: 'traces', min: 0, max: 24, step: 1, def: 7, rand: [2, 16] },
   { key: 'traceSweep', label: 'Trace Sweep', group: 'traces', min: 10, max: 340, step: 1, def: 160, rand: [60, 300] },
   { key: 'tracePads', label: 'Trace Pads', group: 'traces', min: 0, max: 1, step: 0.01, def: 0.5, rand: [0, 1] },
+
+  // Manufacturing limits: geometry never goes below these (set by the process preset).
+  { key: 'minHole', label: 'Min Hole Ø', group: 'fab', min: 0.3, max: 12, step: 0.1, def: 1, rand: null },
+  { key: 'minWeb', label: 'Min Web', group: 'fab', min: 0.3, max: 10, step: 0.1, def: 1.5, rand: null },
 ];
 
 export const PARAM_MAP = Object.fromEntries(PARAMS.map((p) => [p.key, p]));
@@ -139,7 +144,7 @@ function buildPiece(p, ring, a, b, delta, rng, k) {
   const { rIn, rOut } = ring;
   const w = rOut - rIn;
   const mid = (rIn + rOut) / 2;
-  const depth = p.notchDepth * w;
+  const depth = Math.max(0, Math.min(p.notchDepth * w, w - p.minWeb));
   const c = Math.max(0, Math.min(p.edge, (w - depth) * 0.45, (b - a) * rIn * 0.25));
 
   // --- notches: stepped sections of the inner/outer edge with 45° transitions
@@ -261,36 +266,52 @@ function buildPiece(p, ring, a, b, delta, rng, k) {
 
   if (rng() < p.bubbleDensity) {
     const scale = 1 - p.chaos * 0.35 * rng();
-    const maxR = Math.min((p.bubbleSize * w * scale) / 2, (p.bubbleSpacing - 1.2) / 2);
-    if (maxR >= 0.6) {
+    const minR = p.minHole / 2;
+    const maxR = Math.min((p.bubbleSize * w * scale) / 2, (p.bubbleSpacing - p.minWeb) / 2);
+    if (maxR >= minR) {
       placeRow(
         p.bubbleSpacing,
         (th) => {
           const [rI, rO] = localBand(th, (maxR + 1.5) / mid);
           const lw = rO - rI;
-          const r = Math.min(maxR, (p.bubbleSize * lw * scale) / 2, lw / 2 - 0.8);
-          if (r < 0.6) return null;
+          const r = Math.min(maxR, (p.bubbleSize * lw * scale) / 2, lw / 2 - p.minWeb);
+          if (r < minR) return null;
           const [x, y] = polar((rI + rO) / 2, th);
           return { x, y, r, kind: 'bubble' };
         },
-        Math.max(c, maxR) + 2.5,
+        Math.max(c, maxR) + p.minWeb + 1,
       );
     }
   } else if (rng() < p.viaDensity) {
-    const vr = Math.min(2.2, Math.max(0.8, w * 0.06));
+    const vr = Math.max(p.minHole / 2, Math.min(2.2, Math.max(0.8, w * 0.06)));
     placeRow(
-      Math.max(4 * vr + 2, p.bubbleSpacing * 0.55),
+      Math.max(2 * vr + Math.max(p.minWeb, 2 * vr), p.bubbleSpacing * 0.55),
       (th) => {
         const [rI, rO] = localBand(th, (vr + 1.5) / mid);
-        if (rO - rI < 2 * vr + 1.6) return null;
+        if (rO - rI < 2 * vr + 2 * p.minWeb) return null;
         const [x, y] = polar((rI + rO) / 2, th);
         return { x, y, r: vr, kind: 'via' };
       },
-      Math.max(c, vr) + 2.5,
+      Math.max(c, vr) + p.minWeb + 1,
     );
   }
 
-  return { id: `${ring.index}-${k}`, ring: ring.index, t: ring.t, a, b, points, holes };
+  let minWidth = Infinity;
+  for (let i = 0; i <= 120; i++) {
+    const th = lerp(safeLo, safeHi, i / 120);
+    minWidth = Math.min(minWidth, rOutAt(th + delta) - rInAt(th));
+  }
+  // Spot for an engraved part number: the point on the mid-line farthest from any hole.
+  let label = polar(mid, lerp(safeLo, safeHi, 0.5));
+  let best = -1;
+  for (let i = 1; i < 24; i++) {
+    const th = lerp(safeLo, safeHi, i / 24);
+    const pt = polar((rInAt(th) + rOutAt(th + delta)) / 2, th);
+    const clear = holes.reduce((m, h) => Math.min(m, Math.hypot(h.x - pt[0], h.y - pt[1]) - h.r), Infinity);
+    if (clear > best) [best, label] = [clear, pt];
+  }
+
+  return { id: `${ring.index + 1}.${k + 1}`, ring: ring.index, t: ring.t, a, b, points, holes, minWidth, label };
 }
 
 function buildHairlines(p, rings) {

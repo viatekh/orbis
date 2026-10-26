@@ -2,99 +2,145 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Orbis — Circular Circuit Generator</title>
-  <meta name="description" content="Generative circular-circuit designs for laser cutting, plotting and print." />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Orbis</title>
+  <meta name="description" content="Parametric ring-circuit designs for laser cutting, CNC, 3D printing and pen plotting." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="topbar">
+<div class="app">
+  <header class="bar">
     <div class="brand">
-      <span class="logo" aria-hidden="true"></span>
-      <span class="name">ORBIS</span>
-      <span class="tag">circular circuit generator</span>
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="58 8" />
+        <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="30 6" transform="rotate(140 16 16)" />
+        <circle cx="16" cy="16" r="3" fill="var(--accent)" />
+      </svg>
+      <span class="wordmark">ORBIS</span>
+      <span class="tagline">ring circuit workshop</span>
     </div>
-    <div class="top-actions">
+    <div class="bar-actions">
       <button id="btnRandom" title="Randomize unlocked parameters (R)">Randomize</button>
       <button id="btnMutate" title="Nudge unlocked parameters (M)">Mutate</button>
-      <button id="btnSeed" title="New seed (N)">New Seed</button>
-      <span class="sep"></span>
-      <button id="btnUndo" class="icon" title="Undo (Ctrl+Z)">↶</button>
-      <button id="btnRedo" class="icon" title="Redo (Ctrl+Shift+Z)">↷</button>
-      <button id="btnAnimate" class="icon" title="Animate rings (Space)">▶</button>
+      <button id="btnSeed" title="New seed (N)">New seed</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button id="btnUndo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+      <button id="btnRedo" class="icon" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
+      <button id="btnAnimate" class="icon" title="Spin rings (Space)" aria-label="Spin rings">▶</button>
     </div>
-  </div>
-  <div class="accent-bar"></div>
+  </header>
 
-  <main class="layout">
-    <section class="frame viewport-frame">
-      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-      <div class="viewport" id="viewport">
-        <div class="scene"><div class="stage" id="stage"><div class="grid"></div></div></div>
-        <div class="hud hud-tl">
-          <label class="chip select">
-            <select id="view" aria-label="View">
-              <option value="top">Top</option>
-              <option value="tilt">Tilt</option>
-              <option value="exploded">Exploded</option>
-            </select>
-          </label>
-        </div>
-        <div class="hud hud-tr stats" id="stats"></div>
-        <div class="hud hud-bl hint">drag to orbit · scroll to zoom · dbl-click to reset</div>
-        <button class="hud hud-br mode-label" id="modeLabel" title="Cycle render mode (V)">LINE WORK</button>
+  <main class="work">
+    <aside class="col design-col" aria-label="Design">
+      <div class="col-head">
+        <h2>Design</h2>
+        <span class="file" id="fileName">orbis.svg</span>
       </div>
-    </section>
-
-    <aside class="frame panel">
-      <div class="panel-head">
-        <span class="panel-title">Generator</span>
-        <span class="panel-file" id="fileName">orbis.svg</span>
+      <div class="preset-row">
+        <select id="preset" aria-label="Preset"></select>
+        <button id="btnSavePreset" title="Save current design as a preset">Save</button>
+        <button id="btnDeletePreset" title="Delete selected saved preset">Delete</button>
       </div>
-
-      <div class="row-split">
-        <label class="field"><span>Palette</span><select id="palette"></select></label>
-        <label class="field"><span>Render</span><select id="mode"></select></label>
-      </div>
-
-      <div class="row-split presets">
-        <label class="field grow"><span>Preset</span><select id="preset"></select></label>
-        <button id="btnSavePreset" title="Save current as preset">Save</button>
-        <button id="btnDeletePreset" title="Delete selected user preset">Delete</button>
-      </div>
-
       <div id="controls"></div>
-
-      <div class="export">
-        <div class="export-title">Export</div>
-        <div class="export-grid">
-          <button data-export="cut-svg" title="Laser-ready SVG in mm — CUT (red) and ENGRAVE (blue) layers">SVG · Cut</button>
-          <button data-export="dxf" title="DXF R12 in mm — CUT / ENGRAVE layers">DXF</button>
-          <button data-export="art-svg" title="Styled SVG as shown">SVG · Art</button>
-          <button data-export="png" title="2048×2048 PNG">PNG</button>
-          <button data-export="json" title="Parameters as JSON">JSON</button>
-          <button data-export="link" title="Copy a shareable link">Copy Link</button>
-        </div>
-        <label class="import">Import JSON<input type="file" id="importFile" accept="application/json,.json" /></label>
-      </div>
     </aside>
 
-    <section class="frame variations-frame">
-      <div class="panel-head">
-        <span class="panel-title">Variations</span>
-        <button id="btnShuffle" class="ghost" title="New variations (X)">Shuffle ⟳</button>
+    <section class="stage-col">
+      <div class="viewport" id="viewport">
+        <div class="scene"><div class="stage" id="stage"><div class="layer mat" id="mat"></div></div></div>
+        <div class="hud hud-tl seg small" id="viewSeg" role="group" aria-label="View">
+          <button data-view="top">Top</button>
+          <button data-view="tilt">Tilt</button>
+          <button data-view="exploded">Exploded</button>
+        </div>
+        <div class="hud hud-tr hud-selects">
+          <select id="mode" aria-label="Render"></select>
+          <select id="palette" aria-label="Palette"></select>
+        </div>
+        <div class="hud hud-bl scalebar" id="scalebar"><i></i><span></span></div>
+        <div class="hud hud-br readout" id="stats"></div>
+      </div>
+      <div class="vars-head">
+        <h2>Variations</h2>
+        <button id="btnShuffle" class="ghost" title="New variations (X)">Shuffle</button>
       </div>
       <div class="variations" id="variations"></div>
     </section>
+
+    <aside class="col make-col" aria-label="Make">
+      <div class="col-head"><h2>Make</h2><span class="file" id="jobName"></span></div>
+
+      <div class="seg" id="processSeg" role="group" aria-label="Process"></div>
+
+      <div class="fields">
+        <label class="f wide"><span>Material</span><select id="fab-material"></select></label>
+        <label class="f"><span id="thkLabel">Thickness</span><b><input id="fab-thickness" type="number" min="0" max="50" step="0.5" /><em>mm</em></b></label>
+        <label class="f"><span id="toolLabel">Tool Ø</span><b><input id="fab-tool" type="number" min="0.05" max="25" step="0.05" /><em>mm</em></b></label>
+        <label class="f" id="kerfField"><span>Kerf comp.</span><b><input id="fab-kerf" type="number" min="0" max="2" step="0.01" /><em>mm</em></b></label>
+        <label class="f"><span>Border</span><b><input id="fab-border" type="number" min="4" max="60" step="1" /><em>mm</em></b></label>
+        <label class="f"><span>Min hole Ø</span><b><input id="p-minHole" type="number" min="0.3" max="12" step="0.1" /><em>mm</em></b></label>
+        <label class="f"><span>Min web</span><b><input id="p-minWeb" type="number" min="0.3" max="10" step="0.1" /><em>mm</em></b></label>
+        <label class="f"><span>Bed width</span><b><input id="fab-bedW" type="number" min="50" max="3000" step="10" /><em>mm</em></b></label>
+        <label class="f"><span>Bed depth</span><b><input id="fab-bedH" type="number" min="50" max="3000" step="10" /><em>mm</em></b></label>
+      </div>
+
+      <div class="sub" id="layoutBlock">
+        <h3>Cut layout</h3>
+        <div class="seg small" id="layoutSeg" role="group" aria-label="Cut layout"></div>
+      </div>
+
+      <div class="sub" id="stlBlock" hidden>
+        <h3>Relief</h3>
+        <div class="fields">
+          <label class="f"><span>Part height</span><b><input id="fab-relief" type="number" min="0.4" max="30" step="0.2" /><em>mm</em></b></label>
+          <label class="f"><span>Step / ring</span><b><input id="fab-ringStep" type="number" min="-3" max="3" step="0.1" /><em>mm</em></b></label>
+        </div>
+        <label class="check"><input type="checkbox" id="fab-stlBase" /> Base disc</label>
+      </div>
+
+      <div class="checks-row">
+        <label class="check"><input type="checkbox" id="fab-engrave" /> <span id="engraveLabel">Engrave traces</span></label>
+        <label class="check"><input type="checkbox" id="fab-labels" /> Part numbers</label>
+        <label class="check"><input type="checkbox" id="fab-mounting" /> Mounting holes</label>
+      </div>
+
+      <div class="sub">
+        <h3>Checks</h3>
+        <ul class="dfm" id="checks"></ul>
+      </div>
+
+      <div class="sub">
+        <h3>Estimate</h3>
+        <dl class="estimate" id="estimate"></dl>
+      </div>
+
+      <div class="sub">
+        <h3>Output <span class="legend"><i class="lg-cut"></i>cut <i class="lg-eng"></i>engrave <i class="lg-guide"></i>sheet</span></h3>
+        <div class="job-preview" id="jobPreview"></div>
+        <p class="note" id="jobNote"></p>
+      </div>
+
+      <div class="exports">
+        <button class="primary" data-export="svg" title="Toolpath SVG in mm — red cut, blue engrave">Export SVG</button>
+        <button data-export="dxf" title="DXF R12 in mm with CUT / ENGRAVE layers">DXF</button>
+        <button data-export="stl" title="Binary STL relief for 3D printing">STL</button>
+        <button data-export="zip" title="SVG, DXF, STL, settings and checks in one archive">Bundle .zip</button>
+        <button data-export="png" title="2048 px render as shown">PNG</button>
+        <button data-export="json" title="Design + make settings">JSON</button>
+      </div>
+      <label class="import">Import JSON<input type="file" id="importFile" accept="application/json,.json" /></label>
+    </aside>
   </main>
 
-  <footer class="footer">
+  <footer class="keys">
     <span><kbd>R</kbd> randomize</span><span><kbd>M</kbd> mutate</span><span><kbd>N</kbd> seed</span>
-    <span><kbd>Space</kbd> animate</span><span><kbd>V</kbd> render</span><span><kbd>C</kbd> view</span>
+    <span><kbd>Space</kbd> spin</span><span><kbd>V</kbd> render</span><span><kbd>C</kbd> view</span>
     <span><kbd>X</kbd> shuffle</span><span><kbd>Ctrl Z</kbd> undo</span>
   </footer>
-  <div class="toast" id="toast"></div>
-
-  <script type="module" src="src/app.js"></script>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script type="module" src="src/app.js"></script>
 </body>
 </html>

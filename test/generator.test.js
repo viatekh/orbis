@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generate, normalizeParams, DEFAULTS, PARAMS } from '../src/generator.js';
-import { cutSVG, toDXF } from '../src/export.js';
+import { fabSVG, toDXF } from '../src/export.js';
+import { defaultFab } from '../src/fabrication.js';
 import { designSVG } from '../src/render.js';
 
 const SAMPLES = [
@@ -72,12 +73,13 @@ test('fuzz: 300 random parameter sets are well-formed', () => {
 
 test('exports are structurally valid', () => {
   const d = generate({});
-  const dxf = toDXF(d);
+  const dxf = toDXF(d, defaultFab('laser'));
   assert.match(dxf, /^0\nSECTION/);
   assert.match(dxf, /EOF\n$/);
   assert.equal((dxf.match(/\nPOLYLINE\n/g) || []).length, d.parts.length);
+  assert.equal((dxf.match(/\nCIRCLE\n/g) || []).length, d.stats.cutouts + d.hairlines.reduce((s, h) => s + h.pads.length, 0));
   assert.equal((dxf.match(/\nARC\n/g) || []).length, d.hairlines.length);
-  const cut = cutSVG(d);
+  const cut = fabSVG(d, defaultFab('laser'));
   assert.match(cut, /width="[\d.]+mm"/);
   assert.match(cut, /inkscape:label="CUT"/);
   assert.doesNotMatch(designSVG(d), /NaN/);

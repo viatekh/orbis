@@ -1,6 +1,6 @@
 # Orbis — circular circuit generator
 
-Parametric generator for concentric "circuit ring" designs: banded rings sliced into parts, with stepped notches, bubble cutouts, via rows and hairline traces. Built for laser cutting, pen plotting and print, with a live 3D preview.
+Parametric generator for concentric "circuit ring" designs: banded rings sliced into parts, with stepped notches, bubble cutouts, via rows and hairline traces. Built to be made: laser cutting, CNC routing, 3D printing and pen plotting.
 
 No build step, no dependencies.
 
@@ -11,26 +11,35 @@ npm test         # geometry + export tests (node --test)
 
 ## Features
 
-- **Live parametric controls** — 21 parameters across Layout, Slices, Notches & Edges, Cutouts and Traces. Drag sliders or type exact values.
-- **Deterministic seeds** — every stage draws from its own random sub-stream, so changing bubble size doesn't reshuffle the slice layout.
-- **Views** — Top, Tilt and Exploded (rings stacked in 3D). Drag to orbit, scroll to zoom, double-click to reset.
-- **Render modes** — Line Work, Solid, Neon, Plot (ink on paper). Six palettes.
-- **Animate** — rings counter-rotate at different speeds.
-- **Variations explorer** — 12 labelled mutations of the current design (`4 RINGS · SEED 40`, `NOTCH 0.7 · EDGE 4`, …). Click one to adopt it.
-- **Randomize / Mutate / New Seed** with per-parameter locks, plus full undo/redo.
-- **Presets** — built-ins plus your own saved to the browser.
-- **Sharing** — the design lives in the URL hash; *Copy Link* shares the exact design.
-- **Fabrication stats** — part and cutout counts, outer Ø, total cut length and material area.
+- **Live parametric controls**: 21 design parameters across Layout, Slices, Notches & Edges, Cutouts and Traces.
+- **Deterministic seeds**: each stage draws from its own random sub-stream, so changing bubble size doesn't reshuffle the slice layout.
+- **Workshop preview**: parts rendered in the chosen material on a millimetre cutting mat, with a live scale bar. Top, Tilt and Exploded views; Material, Toolpath, Line Work, Solid, Neon and Plot render modes.
+- **Variations explorer**, **Randomize / Mutate / New Seed** with per-parameter locks, undo/redo, presets and shareable URLs.
+
+## Making it
+
+The **Make** panel turns the design into something a machine can produce.
+
+- **Process presets**: Laser, CNC, 3D Print and Pen Plot set tool/beam/nozzle size, kerf, bed size, material and the manufacturing limits below.
+- **Manufacturing limits are part of the geometry**: *Min hole Ø* and *Min web* are hard constraints. No hole is smaller than the bit, and no web between holes or edges is thinner than the limit.
+- **Checks (DFM)**: slice and ring gaps against the tool, thinnest section, knife-edge tips from steep wall angles, CNC inside-corner radii, and bed fit.
+- **Estimates**: machine or print time, weight from material density, pierce count and depth passes.
+- **Cut layouts**
+  - *Assembled*: as designed.
+  - *Nested sheets*: each part is rotated to its tightest bounding box and packed onto bed-sized sheets, with optional engraved part numbers.
+  - *Stencil plate*: one connected disc with the parts cut out as windows.
+  - *Backer disc*: a mounting disc engraved with every part outline for glue-up registration, plus the traces.
+- **Kerf compensation** (laser): part outlines grow and holes shrink by half the kerf.
 
 ## Exports
 
 | Format | Contents |
 | --- | --- |
-| SVG · Cut | True mm units. `CUT` layer (red, parts + holes) and `ENGRAVE` layer (blue, traces + pads) as Inkscape layers. |
-| DXF | R12, mm, `CUT` / `ENGRAVE` layers — opens in LightBurn, Fusion, Illustrator, LibreCAD. |
-| SVG · Art | Styled as shown on screen. |
-| PNG | 2048 × 2048. |
-| JSON | Parameters; re-load with *Import JSON*. |
+| SVG | True mm size. Layers `CUT` (#ff0000), `ENGRAVE` (#0000ff), `LABELS`, `GUIDES` (sheet outlines; don't cut). Follows the LightBurn / Glowforge colour convention. |
+| DXF | R12 in mm with the same layers. Opens in LightBurn, Fusion, VCarve, Illustrator and LibreCAD. |
+| STL | Binary, watertight relief: optional base disc with mounting holes, parts extruded per ring height, raised traces. |
+| Bundle .zip | SVG, DXF, STL, settings JSON and a README with the checks. |
+| PNG / JSON | 2048 px render; settings you can re-import. |
 
 ## Keyboard
 
@@ -42,7 +51,10 @@ npm test         # geometry + export tests (node --test)
 index.html, styles.css   UI shell
 src/generator.js         geometry (pure, units = mm)
 src/render.js            SVG rendering + palettes
-src/export.js            cut SVG, DXF, PNG
+src/export.js            fabrication SVG, DXF, PNG
+src/fabrication.js       processes, materials, layouts, nesting, checks, estimates
+src/mesh.js              triangulation + STL
+src/zip.js               store-only zip writer
 src/variations.js        variation mutators
 src/presets.js           built-in presets
 src/app.js               UI controller

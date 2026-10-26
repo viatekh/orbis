@@ -10,6 +10,8 @@ export const PALETTES = {
 };
 
 export const MODES = {
+  material: { label: 'Material' },
+  toolpath: { label: 'Toolpath' },
   line: { label: 'Line Work' },
   solid: { label: 'Solid' },
   neon: { label: 'Neon' },
@@ -52,9 +54,23 @@ export function viewBox(design, margin = 1.06) {
   return `${f2(-R)} ${f2(-R)} ${f2(2 * R)} ${f2(2 * R)}`;
 }
 
-function styleFor(mode, color) {
+function styleFor(mode, color, material) {
   if (mode === 'plot') color = '#16181c';
   switch (mode) {
+    case 'material': {
+      const m = material || { fill: '#dcc196', edge: '#6b4a26', engrave: '#7d5631' };
+      return {
+        part: `fill="${m.fill}" stroke="${m.edge}" stroke-width="1"`,
+        hair: `fill="none" stroke="${m.engrave}" stroke-width="1.1" stroke-opacity="0.9"`,
+        pad: `fill="${m.engrave}"`,
+      };
+    }
+    case 'toolpath':
+      return {
+        part: `fill="none" stroke="#ff3b30" stroke-width="1"`,
+        hair: `fill="none" stroke="#3d7bff" stroke-width="1"`,
+        pad: `fill="#3d7bff"`,
+      };
     case 'solid':
       return {
         part: `fill="${color}" fill-opacity="0.88" stroke="${color}" stroke-width="0.6"`,
@@ -77,17 +93,17 @@ function styleFor(mode, color) {
 }
 
 // Inner markup (no <svg> wrapper) for a subset of rings.
-export function ringsMarkup(design, { palette = 'circuit', mode = 'line', rings = null, scaleStroke = 1 } = {}) {
+export function ringsMarkup(design, { palette = 'circuit', mode = 'line', rings = null, scaleStroke = 1, material = null } = {}) {
   const include = (i) => rings === null || rings.includes(i);
   let out = '';
   for (const part of design.parts) {
     if (!include(part.ring)) continue;
-    const st = styleFor(mode, paletteColor(palette, part.t));
+    const st = styleFor(mode, paletteColor(palette, part.t), material);
     out += `<path d="${partPath(part)}" fill-rule="evenodd" vector-effect="non-scaling-stroke" ${scaleAttr(st.part, scaleStroke)}/>`;
   }
   for (const h of design.hairlines) {
     if (!include(h.ring)) continue;
-    const st = styleFor(mode, paletteColor(palette, h.t));
+    const st = styleFor(mode, paletteColor(palette, h.t), material);
     out += `<path d="${hairPath(h)}" vector-effect="non-scaling-stroke" ${scaleAttr(st.hair, scaleStroke)}/>`;
     for (const pad of h.pads) out += `<circle cx="${f2(pad.x)}" cy="${f2(pad.y)}" r="${f2(pad.r)}" ${st.pad}/>`;
   }
@@ -104,4 +120,28 @@ export function designSVG(design, opts = {}) {
   const bg = background ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${background}"/>` : '';
   const size = width ? ` width="${width}" height="${height ?? width}"` : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}"${size}>${bg}${ringsMarkup(design, opts)}</svg>`;
+}
+
+// Cutting-mat grid in true millimetres (10 mm minor, 50 mm major), numbered outward from the centre.
+export function matGridSVG(design) {
+  const R = (design.stats.outerDiameter / 2) * 1.06;
+  const E = Math.ceil((R * 1.9) / 50) * 50;
+  let minor = '';
+  let major = '';
+  let nums = '';
+  for (let v = -E; v <= E; v += 10) {
+    const line = `M${v} ${-E}V${E}M${-E} ${v}H${E}`;
+    if (v % 50 === 0) {
+      major += line;
+      if (v > -E && v < E) {
+        nums += `<text x="${v}" y="${-R + 4}" text-anchor="middle">${Math.abs(v)}</text>`;
+        if (v) nums += `<text x="${-R + 4}" y="${v}" dominant-baseline="central">${Math.abs(v)}</text>`;
+      }
+    } else minor += line;
+  }
+  const fs = Math.max(4, R / 40);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox(design)}" overflow="visible">
+<path class="g-min" d="${minor}" vector-effect="non-scaling-stroke"/>
+<path class="g-maj" d="${major}" vector-effect="non-scaling-stroke"/>
+<g class="g-num" font-size="${fs}">${nums}</g></svg>`;
 }
