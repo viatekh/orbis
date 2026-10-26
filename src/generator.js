@@ -301,17 +301,24 @@ function buildPiece(p, ring, a, b, delta, rng, k) {
     const th = lerp(safeLo, safeHi, i / 120);
     minWidth = Math.min(minWidth, rOutAt(th + delta) - rInAt(th));
   }
-  // Spot for an engraved part number: the point on the mid-line farthest from any hole.
-  let label = polar(mid, lerp(safeLo, safeHi, 0.5));
-  let best = -1;
-  for (let i = 1; i < 24; i++) {
-    const th = lerp(safeLo, safeHi, i / 24);
-    const pt = polar((rInAt(th) + rOutAt(th + delta)) / 2, th);
-    const clear = holes.reduce((m, h) => Math.min(m, Math.hypot(h.x - pt[0], h.y - pt[1]) - h.r), Infinity);
-    if (clear > best) [best, label] = [clear, pt];
+  // Candidate spots on the mid-line, each with its clearance to the nearest edge,
+  // hole or part end. Used for engraved part numbers and locating-pin holes.
+  const spots = [];
+  for (let i = 1; i < 40; i++) {
+    const u = i / 40;
+    const th = lerp(safeLo, safeHi, u);
+    const [rI, rO] = localBand(th, 2 / mid);
+    const [x, y] = polar((rI + rO) / 2, th);
+    const toHole = holes.reduce((m, h) => Math.min(m, Math.hypot(h.x - x, h.y - y) - h.r), Infinity);
+    const toEnd = Math.min(th - safeLo, safeHi - th) * mid;
+    spots.push({ x, y, u, clear: Math.min((rO - rI) / 2, toHole, toEnd) });
   }
+  const middle = spots.filter((sp) => sp.u > 0.3 && sp.u < 0.7);
+  const best = (list) => list.reduce((m, sp) => (!m || sp.clear > m.clear ? sp : m), null);
+  const labelSpot = best(middle) || best(spots);
+  const label = labelSpot ? [labelSpot.x, labelSpot.y] : polar(mid, (a + b) / 2);
 
-  return { id: `${ring.index + 1}.${k + 1}`, ring: ring.index, t: ring.t, a, b, points, holes, minWidth, label };
+  return { id: `${ring.index + 1}.${k + 1}`, ring: ring.index, t: ring.t, a, b, points, holes, minWidth, label, spots };
 }
 
 function buildHairlines(p, rings) {

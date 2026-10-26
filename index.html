@@ -103,7 +103,16 @@
       <div class="checks-row">
         <label class="check"><input type="checkbox" id="fab-engrave" /> <span id="engraveLabel">Engrave traces</span></label>
         <label class="check"><input type="checkbox" id="fab-labels" /> Part numbers</label>
-        <label class="check"><input type="checkbox" id="fab-mounting" /> Mounting holes</label>
+        <label class="check"><input type="checkbox" id="fab-mounting" /> Alignment holes</label>
+      </div>
+
+      <div class="sub" id="assemblyBlock">
+        <h3>Assembly</h3>
+        <div class="fields">
+          <label class="check pin-toggle"><input type="checkbox" id="fab-pins" /> Locating pins</label>
+          <label class="f"><span>Pin Ø</span><b><select id="fab-pinD"></select><em>mm</em></b></label>
+        </div>
+        <ol class="steps" id="steps"></ol>
       </div>
 
       <div class="sub">
@@ -126,7 +135,7 @@
         <button class="primary" data-export="svg" title="Toolpath SVG in mm — red cut, blue engrave">Export SVG</button>
         <button data-export="dxf" title="DXF R12 in mm with CUT / ENGRAVE layers">DXF</button>
         <button data-export="stl" title="Binary STL relief for 3D printing">STL</button>
-        <button data-export="zip" title="SVG, DXF, STL, settings and checks in one archive">Bundle .zip</button>
+        <button data-export="zip" title="Every sheet (parts, backer, jig) as SVG + DXF, STL bodies, settings and build steps">Kit .zip</button>
         <button data-export="png" title="2048 px render as shown">PNG</button>
         <button data-export="json" title="Design + make settings">JSON</button>
       </div>

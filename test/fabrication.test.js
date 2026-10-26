@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generate } from '../src/generator.js';
-import { buildJob, checkDesign, defaultFab, estimate, offsetPolygon, signedArea, PROCESSES } from '../src/fabrication.js';
+import { buildJob, checkDesign, defaultFab, estimate, offsetPolygon, signedArea, withPins, PROCESSES } from '../src/fabrication.js';
 import { zip } from '../src/zip.js';
 
 test('kerf offset grows parts and shrinks holes', () => {
@@ -62,4 +62,31 @@ test('zip writer produces a readable archive', () => {
   assert.equal(dv.getUint32(0, true), 0x04034b50);
   assert.equal(dv.getUint32(z.length - 22, true), 0x06054b50);
   assert.equal(dv.getUint16(z.length - 12, true), 2);
+});
+
+test('locating pins land inside parts with web to spare, matching holes on the backer', () => {
+  const d = generate({ seed: 7, rings: 8 });
+  const fab = defaultFab('laser');
+  const pinned = withPins(d, fab);
+  const pins = pinned.parts.flatMap((p) => p.holes.filter((h) => h.kind === 'pin').map((h) => ({ h, p })));
+  assert.ok(pins.length >= d.parts.length);
+  for (const { h, p } of pins) {
+    const ring = d.rings[p.ring];
+    const r = Math.hypot(h.x, h.y);
+    assert.ok(r - h.r >= ring.rIn + d.params.minWeb - 1e-6 && r + h.r <= ring.rOut - d.params.minWeb + 1e-6, 'pin too close to edge');
+    for (const o of p.holes) if (o !== h) assert.ok(Math.hypot(o.x - h.x, o.y - h.y) >= o.r + h.r + d.params.minWeb - 1e-6, 'pin hits hole');
+  }
+  const backer = buildJob(d, { ...fab, layout: 'backer' });
+  for (const { h } of pins) assert.ok(backer.cut.circles.some((c) => Math.hypot(c.x - h.x, c.y - h.y) < 1e-9), 'backer missing pin hole');
+});
+
+test('glue jig windows are oversize and share the backer alignment holes', () => {
+  const d = generate({});
+  const fab = { ...defaultFab('laser'), pins: false };
+  const jig = buildJob(d, { ...fab, layout: 'jig' });
+  const backer = buildJob(d, { ...fab, layout: 'backer', mounting: true });
+  assert.ok(Math.abs(signedArea(jig.cut.polys[0])) > Math.abs(signedArea(d.parts[0].points)));
+  const align = (job) => job.cut.circles.filter((c) => c.x !== 0 || c.y !== 0).map((c) => `${c.x.toFixed(3)},${c.y.toFixed(3)}`).sort();
+  assert.deepEqual(align(jig), align(backer));
+  assert.equal(align(jig).length, 4);
 });

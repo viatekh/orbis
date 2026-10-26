@@ -1,6 +1,6 @@
 // 3D-print output: polygon-with-holes triangulation and a binary STL relief.
 
-import { signedArea } from './fabrication.js';
+import { signedArea, withPins, alignmentHoles } from './fabrication.js';
 
 const TAU = Math.PI * 2;
 const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
@@ -129,41 +129,47 @@ function extrude(out, outer, holes, z0, z1) {
   }
 }
 
-// Y is flipped so the print matches the on-screen view from above.
-export function buildMesh(design, fab) {
-  const tris = [];
+// Y is flipped so the print matches the on-screen view from above. Bodies share one
+// origin, so loading them together in a slicer keeps them registered (multi-colour).
+export function buildBodies(rawDesign, fab) {
+  const design = withPins(rawDesign, fab);
+  const bodies = { base: [], rings: [], traces: [] };
   const flip = (pts) => pts.map(([x, y]) => [x, -y]);
   const base = fab.stlBase ? Math.max(0.6, fab.thickness) : 0;
   const R = design.stats.outerDiameter / 2;
 
   if (fab.stlBase) {
-    const outerR = R + fab.border;
-    const holes = [];
-    if (fab.mounting) {
-      for (let i = 0; i < 4; i++) {
-        const a = (i / 4) * TAU + Math.PI / 4;
-        holes.push(circle((outerR - fab.border / 2) * Math.cos(a), (outerR - fab.border / 2) * Math.sin(a), 2));
+    const holes = fab.mounting ? alignmentHoles(design, fab).map((h) => circle(h.x, -h.y, h.r)) : [];
+    extrude(bodies.base, circle(0, 0, R + fab.border), holes, 0, base);
+    // pegs under every pin hole so separately printed rings snap into place
+    for (const part of design.parts) {
+      for (const h of part.holes) {
+        if (h.kind === 'pin') extrude(bodies.base, circle(h.x, -h.y, h.r - 0.15), [], base, base + Math.max(0.8, fab.relief * 0.8));
       }
     }
-    extrude(tris, circle(0, 0, outerR), holes, 0, base);
   }
   for (const part of design.parts) {
     const h = Math.max(0.4, fab.relief + fab.ringStep * part.ring);
-    extrude(tris, flip(part.points), part.holes.map((c) => circle(c.x, -c.y, c.r)), base, base + h);
+    extrude(bodies.rings, flip(part.points), part.holes.map((c) => circle(c.x, -c.y, c.r)), base, base + h);
   }
   if (fab.engrave) {
     const w = Math.max(0.8, fab.tool * 2.5);
     const h = Math.max(0.4, fab.relief * 0.35);
     for (const hl of design.hairlines) {
-      extrude(tris, flip(arcBand(hl.r, w, hl.a0, hl.a1)), [], base, base + h);
-      for (const d of hl.pads) extrude(tris, circle(d.x, -d.y, Math.max(d.r, w)), [], base, base + h);
+      extrude(bodies.traces, flip(arcBand(hl.r, w, hl.a0, hl.a1)), [], base, base + h);
+      for (const d of hl.pads) extrude(bodies.traces, circle(d.x, -d.y, Math.max(d.r, w)), [], base, base + h);
     }
   }
-  return tris;
+  return bodies;
 }
 
-export function toSTL(design, fab) {
-  const tris = buildMesh(design, fab);
+export function buildMesh(design, fab) {
+  const b = buildBodies(design, fab);
+  return [...b.base, ...b.rings, ...b.traces];
+}
+
+export function toSTL(design, fab, body = null) {
+  const tris = body ? buildBodies(design, fab)[body] : buildMesh(design, fab);
   const buf = new ArrayBuffer(84 + tris.length * 50);
   const dv = new DataView(buf);
   const header = 'Orbis circular circuit relief (mm)';

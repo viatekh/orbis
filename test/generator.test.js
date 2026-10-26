@@ -73,7 +73,7 @@ test('fuzz: 300 random parameter sets are well-formed', () => {
 
 test('exports are structurally valid', () => {
   const d = generate({});
-  const dxf = toDXF(d, defaultFab('laser'));
+  const dxf = toDXF(d, defaultFab('plot'));
   assert.match(dxf, /^0\nSECTION/);
   assert.match(dxf, /EOF\n$/);
   assert.equal((dxf.match(/\nPOLYLINE\n/g) || []).length, d.parts.length);

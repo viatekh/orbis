@@ -100,6 +100,11 @@ export function ringsMarkup(design, { palette = 'circuit', mode = 'line', rings 
     if (!include(part.ring)) continue;
     const st = styleFor(mode, paletteColor(palette, part.t), material);
     out += `<path d="${partPath(part)}" fill-rule="evenodd" vector-effect="non-scaling-stroke" ${scaleAttr(st.part, scaleStroke)}/>`;
+    // locating pins: shown as fitted dowels so it's clear where they go
+    for (const h of part.holes) {
+      if (h.kind !== 'pin') continue;
+      out += `<circle cx="${f2(h.x)}" cy="${f2(h.y)}" r="${f2(h.r * 0.92)}" class="pin" fill="${mode === 'material' ? '#e9cf9c' : 'none'}" stroke="${mode === 'toolpath' ? '#ff3b30' : '#8a5a2b'}" stroke-width="0.8" stroke-dasharray="${mode === 'material' ? 'none' : '2 1.5'}" vector-effect="non-scaling-stroke"/>`;
+    }
   }
   for (const h of design.hairlines) {
     if (!include(h.ring)) continue;

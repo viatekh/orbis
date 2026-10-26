@@ -28,8 +28,19 @@ The **Make** panel turns the design into something a machine can produce.
   - *Assembled*: as designed.
   - *Nested sheets*: each part is rotated to its tightest bounding box and packed onto bed-sized sheets, with optional engraved part numbers.
   - *Stencil plate*: one connected disc with the parts cut out as windows.
-  - *Backer disc*: a mounting disc engraved with every part outline for glue-up registration, plus the traces.
+  - *Backer disc*: a mounting disc with pin holes, engraved part outlines and the traces.
+  - *Jig*: a glue-up jig with oversize windows that locates every part on the backer.
 - **Kerf compensation** (laser): part outlines grow and holes shrink by half the kerf.
+
+## Putting it together
+
+Separate parts are useless if you can't line them up, so every design comes with its own locating system.
+
+- **Locating pins** (default on). Each part gets two pin holes at its roomiest spots, or one on very short parts, never closer than *Min web* to an edge or hole. The Backer disc gets a matching hole under every pin. Push in dowels, skewers or 1.75 mm filament, drop the parts on, and glue. The pin pair is different on every part, so each part fits only one place, one way round.
+- **Jig for glue-up** (no pins needed). A disc with every part's outline cut as a window, slightly oversize (0.2 mm default). It shares four unevenly spaced alignment holes with the backer, so it sits only one way. Pin it on, drop the parts in, glue, and lift it off.
+- **3D print** prints base, rings and traces fused as one object, so there's nothing to align. The kit also includes the bodies as separate STLs with a shared origin, for multi-colour prints. When printing in pieces, the base has pegs that match the rings' pin holes.
+- **Kit .zip** holds every sheet you need (parts, backer and jig as SVG + DXF), or the STL bodies, plus a README with the numbered build steps and the checks.
+- Traces sit in the gaps between parts, so on a cutter they're engraved on the backer, not the scrap.
 
 ## Exports
 
@@ -38,7 +49,7 @@ The **Make** panel turns the design into something a machine can produce.
 | SVG | True mm size. Layers `CUT` (#ff0000), `ENGRAVE` (#0000ff), `LABELS`, `GUIDES` (sheet outlines; don't cut). Follows the LightBurn / Glowforge colour convention. |
 | DXF | R12 in mm with the same layers. Opens in LightBurn, Fusion, VCarve, Illustrator and LibreCAD. |
 | STL | Binary, watertight relief: optional base disc with mounting holes, parts extruded per ring height, raised traces. |
-| Bundle .zip | SVG, DXF, STL, settings JSON and a README with the checks. |
+| Kit .zip | Parts, backer and glue jig as SVG + DXF (or STL bodies for print), settings JSON, and a README with build steps and checks. |
 | PNG / JSON | 2048 px render; settings you can re-import. |
 
 ## Keyboard

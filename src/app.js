@@ -1,7 +1,7 @@
 import { PARAMS, PARAM_MAP, GROUPS, DEFAULTS, generate, normalizeParams, quantize } from './generator.js';
 import { PALETTES, MODES, ringsMarkup, designSVG, viewBox, paletteColor, matGridSVG } from './render.js';
 import { fabSVG, jobSVG, artSVG, toDXF, svgToPngBlob, download, paramsComment } from './export.js';
-import { PROCESSES, MATERIALS, LAYOUTS, defaultFab, buildJob, checkDesign, estimate } from './fabrication.js';
+import { PROCESSES, MATERIALS, LAYOUTS, PIN_SIZES, defaultFab, buildJob, checkDesign, estimate, withPins, assemblySteps } from './fabrication.js';
 import { toSTL } from './mesh.js';
 import { zip } from './zip.js';
 import { makeVariations } from './variations.js';
@@ -146,7 +146,7 @@ function syncControls() {
 
 // ---------------------------------------------------------------- make controls
 const FAB_NUMS = ['thickness', 'tool', 'kerf', 'border', 'bedW', 'bedH', 'relief', 'ringStep'];
-const FAB_CHECKS = ['engrave', 'labels', 'mounting', 'stlBase'];
+const FAB_CHECKS = ['engrave', 'labels', 'mounting', 'stlBase', 'pins'];
 
 function buildMake() {
   $('#processSeg').innerHTML = Object.entries(PROCESSES).map(([k, v]) => `<button data-process="${k}">${v.label}</button>`).join('');
@@ -160,6 +160,8 @@ function buildMake() {
     if (b) setFab('layout', b.dataset.layout);
   });
   $('#fab-material').addEventListener('change', (e) => setFab('material', e.target.value));
+  $('#fab-pinD').innerHTML = PIN_SIZES.map((d) => `<option value="${d}">${d}</option>`).join('');
+  $('#fab-pinD').addEventListener('change', (e) => setFab('pinD', Number(e.target.value)));
   for (const key of FAB_NUMS) {
     const el = $(`#fab-${key}`);
     el.addEventListener('change', () => {
@@ -195,13 +197,16 @@ function syncMake() {
   const plot = f.process === 'plot';
   $('#layoutBlock').hidden = f.process === 'print' || plot;
   for (const key of ['thickness', 'border', 'mounting']) $(`#fab-${key}`).closest('label').hidden = plot;
+  $('#fab-pinD').value = f.pinD;
+  $('#fab-pinD').closest('label').hidden = !f.pins;
+  $('#assemblyBlock').querySelector('.fields').hidden = plot;
   $('#stlBlock').hidden = f.process !== 'print';
   $('#engraveLabel').textContent = { print: 'Raised traces', plot: 'Draw traces', cnc: 'V-carve traces' }[f.process] || 'Engrave traces';
 }
 
 function setProcess(proc) {
   const pr = PROCESSES[proc];
-  state.fab = { ...state.fab, process: proc, material: pr.material, thickness: pr.thickness, kerf: pr.kerf, tool: pr.tool, bedW: pr.bed[0], bedH: pr.bed[1] };
+  state.fab = { ...state.fab, process: proc, material: pr.material, thickness: pr.thickness, kerf: pr.kerf, tool: pr.tool, bedW: pr.bed[0], bedH: pr.bed[1], pinD: pr.pinD };
   state.params = { ...state.params, minHole: pr.minHole, minWeb: pr.minWeb };
   if (proc === 'plot') {
     state.mode = 'plot';
@@ -304,6 +309,7 @@ let gridFor = null;
 function render(full) {
   const design = generate(state.params);
   state.design = design;
+  const shown = withPins(design, state.fab);
   const n = design.rings.length;
 
   while (layers.length < n) {
@@ -323,7 +329,7 @@ function render(full) {
   const opts = { palette: state.palette, mode: state.mode, material: material() };
   layers.forEach((layer, i) => {
     layer.svg.setAttribute('viewBox', vb);
-    layer.svg.innerHTML = ringsMarkup(design, { ...opts, rings: [i] });
+    layer.svg.innerHTML = ringsMarkup(shown, { ...opts, rings: [i] });
     layer.speed = ((i % 2 ? -1 : 1) * (4 + ((i * 7919) % 13))) / (1 + i * 0.25);
   });
   positionLayers();
@@ -361,6 +367,8 @@ function renderMake() {
       ? [['Print time', `≈ ${time}`], ['Filament', `≈ ${mass}`], ['Parts', d.stats.parts], ['Volume', `${(e.volume / 1000).toFixed(0)} cm³`]]
       : [['Machine time', `≈ ${time}`], [f.process === 'plot' ? 'Paper' : 'Weight', f.process === 'plot' ? `${f.bedW}×${f.bedH}` : `≈ ${mass}`], ['Pierces', e.pierces], ['Passes', e.passes ?? 1]];
   $('#estimate').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+
+  $('#steps').innerHTML = assemblySteps(d, f).map((t) => `<li>${t}</li>`).join('');
 
   const preview = $('#jobPreview');
   $('#jobName').textContent = f.process === 'print' ? `${fileBase()}.stl` : `${fileBase()}-${f.layout}.svg`;
@@ -555,6 +563,9 @@ function readme() {
     'Layers: CUT = red (#ff0000), ENGRAVE = blue (#0000ff), LABELS = black, GUIDES = green (sheet outlines, do not cut).',
     'All files are in millimetres. STL is Z-up.',
     '',
+    'How it goes together:',
+    ...assemblySteps(d, f).map((t, i) => `  ${i + 1}. ${t}`),
+    '',
     'Checks:',
     ...checkDesign(d, f).map((c) => `  [${c.level.toUpperCase()}] ${c.text}`),
     '',
@@ -590,6 +601,29 @@ async function saveZipped(filename, data, type) {
   return saveFile(`${filename}.zip`, zip([{ name: filename, data }]), 'application/zip');
 }
 
+// Everything needed to build it: the parts, plus the backer and jig that locate them.
+function kitFiles(d, f, base) {
+  const files = [];
+  if (f.process !== 'print') {
+    const partsLayout = f.layout === 'sheets' ? 'sheets' : 'assembled';
+    const sheets = f.process === 'plot' ? [partsLayout] : [partsLayout, 'backer', 'jig'];
+    for (const layout of sheets) {
+      const lf = { ...f, layout, mounting: layout === 'assembled' || layout === 'sheets' ? f.mounting : true };
+      const name = { assembled: 'parts', sheets: 'parts-nested', backer: 'backer', jig: 'glue-jig' }[layout];
+      files.push({ name: `${base}-${name}.svg`, data: fabSVG(d, lf) }, { name: `${base}-${name}.dxf`, data: toDXF(d, lf) });
+    }
+  }
+  if (f.process === 'print') {
+    files.push({ name: `${base}.stl`, data: toSTL(d, f).buffer });
+    for (const body of ['base', 'rings', 'traces']) {
+      const stl = toSTL(d, f, body);
+      if (stl.triangles) files.push({ name: `stl-bodies/${base}-${body}.stl`, data: stl.buffer });
+    }
+  }
+  files.push({ name: `${base}.json`, data: settingsJSON() }, { name: 'README.txt', data: readme() });
+  return files;
+}
+
 async function doExport(kind) {
   const d = state.design;
   const f = state.fab;
@@ -605,17 +639,7 @@ async function doExport(kind) {
     case 'stl':
       return saveZipped(`${base}.stl`, toSTL(d, f).buffer, 'model/stl');
     case 'zip':
-      return saveFile(
-        `${base}.zip`,
-        zip([
-          { name: `${base}-${f.layout}.svg`, data: fabSVG(d, f) },
-          { name: `${base}-${f.layout}.dxf`, data: toDXF(d, f) },
-          { name: `${base}.stl`, data: toSTL(d, f).buffer },
-          { name: `${base}.json`, data: settingsJSON() },
-          { name: 'README.txt', data: readme() },
-        ]),
-        'application/zip',
-      );
+      return saveFile(`${base}-kit.zip`, zip(kitFiles(d, f, base)), 'application/zip');
     case 'png': {
       const svg = artSVG(d, { palette: state.palette, mode: state.mode, material: material(), background: bg, scaleStroke: 2.5 });
       return saveFile(`${base}.png`, await svgToPngBlob(svg, 2048), 'image/png');

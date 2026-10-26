@@ -217,7 +217,7 @@ input[type='range']:hover::-webkit-slider-thumb { border-color: var(--accent); }
 .seg button.on { background: var(--accent); color: var(--accent-ink); }
 .seg.small button { padding: 5px 10px; font-size: 12px; }
 .hud .seg { background: rgba(20, 24, 26, 0.82); border-color: rgba(255, 255, 255, 0.16); }
-.hud .seg button { color: #c9d1cd; }
+.hud .seg button { color: #c9d1cd; flex: none; }
 .hud .seg button + button { border-color: rgba(255, 255, 255, 0.16); }
 .hud .seg button.on { color: var(--accent-ink); }
 
@@ -267,6 +267,11 @@ input[type='range']:hover::-webkit-slider-thumb { border-color: var(--accent); }
 .check { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 .check input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
 
+.pin-toggle { align-self: end; padding-bottom: 6px; }
+.f b select { border: 0; background: transparent; width: 100%; font-family: var(--mono); font-size: 13px; padding: 6px 8px; }
+.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.4; }
+.steps li::marker { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+.seg.small button { min-width: 0; }
 .dfm { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .dfm li { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: baseline; font-size: 13px; line-height: 1.35; }
 .dfm .tag { font-family: var(--mono); font-size: 10px; font-weight: 600; text-transform: uppercase; text-align: center; border-radius: 3px; padding: 1px 0; border: 1px solid currentColor; }

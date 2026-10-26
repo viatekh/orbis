@@ -20,20 +20,20 @@ export const PROCESSES = {
   laser: {
     label: 'Laser', tool: 0.15, kerf: 0.15, minHole: 1, minWeb: 1.5, bed: [600, 400], thickness: 3,
     material: 'birch', materials: ['birch', 'mdf', 'acrylic', 'black', 'paper'],
-    speed: 12, pierce: 0.3, toolLabel: 'Beam Ø',
+    speed: 12, pierce: 0.3, toolLabel: 'Beam Ø', pinD: 3,
   },
   cnc: {
     label: 'CNC', tool: 3.175, kerf: 0, minHole: 3.4, minWeb: 3, bed: [1220, 610], thickness: 6,
     material: 'birch', materials: ['birch', 'mdf', 'aluminium', 'brass', 'hdpe', 'acrylic'],
-    speed: 20, pierce: 2, toolLabel: 'Bit Ø',
+    speed: 20, pierce: 2, toolLabel: 'Bit Ø', pinD: 6,
   },
   print: {
     label: '3D Print', tool: 0.4, kerf: 0, minHole: 1.2, minWeb: 1.2, bed: [256, 256], thickness: 2,
-    material: 'pla', materials: ['pla', 'petg'], speed: 0, pierce: 0, toolLabel: 'Nozzle Ø',
+    material: 'pla', materials: ['pla', 'petg'], speed: 0, pierce: 0, toolLabel: 'Nozzle Ø', pinD: 1.75,
   },
   plot: {
     label: 'Pen Plot', tool: 0.5, kerf: 0, minHole: 0.6, minWeb: 0.6, bed: [420, 297], thickness: 0,
-    material: 'paper', materials: ['paper'], speed: 40, pierce: 0.1, toolLabel: 'Pen Ø',
+    material: 'paper', materials: ['paper'], speed: 40, pierce: 0.1, toolLabel: 'Pen Ø', pinD: 3,
   },
 };
 
@@ -42,7 +42,11 @@ export const LAYOUTS = {
   sheets: 'Nested sheets',
   plate: 'Stencil plate',
   backer: 'Backer disc',
+  jig: 'Jig for glue-up',
 };
+
+// Typical stock for locating pins: dowel, bamboo skewer, filament, steel dowel pin.
+export const PIN_SIZES = [1.75, 2, 3, 4, 5, 6, 8];
 
 export function defaultFab(process = 'laser') {
   const pr = PROCESSES[process];
@@ -55,6 +59,9 @@ export function defaultFab(process = 'laser') {
     bedW: pr.bed[0],
     bedH: pr.bed[1],
     layout: 'assembled',
+    pins: true,
+    pinD: pr.pinD,
+    jigClearance: 0.2,
     engrave: true,
     labels: false,
     mounting: true,
@@ -96,9 +103,6 @@ export function offsetPolygon(pts, d) {
   });
 }
 
-const circlePts = (cx, cy, r, n = 64) =>
-  Array.from({ length: n }, (_, i) => [cx + r * Math.cos((i / n) * TAU), cy + r * Math.sin((i / n) * TAU)]);
-
 function bbox(pts) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [x, y] of pts) {
@@ -112,6 +116,67 @@ function bbox(pts) {
 
 const rot = ([x, y], c, s) => [x * c - y * s, x * s + y * c];
 
+// ------------------------------------------------------------------ assembly
+
+// Locating pins: two holes per part (one on short parts) at the roomiest spots
+// near each end, so every part only drops onto the backer one way.
+export function pinHoleRadius(fab) {
+  return fab.pinD / 2 + 0.05;
+}
+
+export function withPins(design, fab) {
+  if (design.pinned || !fab.pins || fab.process === 'plot') return design;
+  const r = pinHoleRadius(fab);
+  const need = r + design.params.minWeb;
+  const best = (list) => list.reduce((m, sp) => (!m || sp.clear > m.clear ? sp : m), null);
+  let pinless = 0;
+  const parts = design.parts.map((part) => {
+    const ok = part.spots.filter((sp) => sp.clear >= need && Math.hypot(sp.x - part.label[0], sp.y - part.label[1]) > r + 4);
+    let pins = [best(ok.filter((sp) => sp.u < 0.4)), best(ok.filter((sp) => sp.u > 0.6))].filter(Boolean);
+    if (!pins.length && ok.length) pins = [best(ok)];
+    if (!pins.length) pinless++;
+    return { ...part, holes: [...part.holes, ...pins.map((sp) => ({ x: sp.x, y: sp.y, r, kind: 'pin' }))] };
+  });
+  const pins = parts.reduce((n, p) => n + p.holes.filter((h) => h.kind === 'pin').length, 0);
+  return { ...design, parts, pinned: true, pinStats: { pins, pinless } };
+}
+
+export const alignmentHoles = (design, fab) => {
+  const outer = design.stats.outerDiameter / 2 + fab.border;
+  const r = Math.max(fab.process === 'cnc' ? fab.tool / 2 + 0.2 : 0, fab.pins ? pinHoleRadius(fab) : 2);
+  return Array.from({ length: 4 }, (_, i) => {
+    // uneven spacing so the jig can only sit on the backer one way round
+    const a = [45, 135, 225, 300][i] * (Math.PI / 180);
+    return { x: (outer - fab.border / 2) * Math.cos(a), y: (outer - fab.border / 2) * Math.sin(a), r };
+  });
+};
+
+// Plain-language build steps for the current process and options.
+export function assemblySteps(design, fab) {
+  const pin = `${fab.pinD} mm`;
+  const pinStock = { 1.75: '1.75 mm filament', 2: '2 mm steel pins', 3: '3 mm dowel or bamboo skewer', 6: '6 mm dowel' }[fab.pinD] || `${pin} dowel`;
+  if (fab.process === 'print') {
+    return fab.stlBase
+      ? [
+          'Print the STL as one piece: base, rings and traces are fused, so nothing needs aligning.',
+          'For multi-colour, load base / rings / traces STLs from the Bundle together as one multi-part object; they share the same origin.',
+          ...(fab.pins ? [`Printing in sections? Rings have ${pin} pin holes and the base has matching pegs.`] : []),
+        ]
+      : ['Print the rings STL. Each part is a separate body.', ...(fab.pins ? [`Glue onto a backer with ${pinStock} through the pin holes.`] : [])];
+  }
+  if (fab.process === 'plot') return ['Plot the SVG at 100% scale. Everything is drawn in place.'];
+  const steps = [`Cut the parts (${fab.layout === 'sheets' ? 'Nested sheets' : 'Assembled'} layout)${fab.labels ? ' with part numbers' : ''}.`];
+  steps.push(`Cut the Backer disc${fab.pins ? ` — it has matching ${pin} pin holes` : ''}${fab.engrave ? ' and the engraved traces' : ''}.`);
+  if (fab.pins) {
+    steps.push(`Push ${pinStock} into the backer's pin holes, then drop each part onto its pins. Each part only fits one way.`);
+    steps.push('Glue, then trim the pins flush from behind.');
+  } else {
+    steps.push('Cut the Jig, pin it to the backer through the four alignment holes (they only line up one way).');
+    steps.push('Drop each part into its window in the jig, glue, then lift the jig off.');
+  }
+  return steps;
+}
+
 // ------------------------------------------------------------------ jobs
 //
 // A job is the toolpath-level description every exporter consumes:
@@ -120,7 +185,8 @@ const rot = ([x, y], c, s) => [x * c - y * s, x * s + y * c];
 //   labels:  engraved part numbers
 //   guides:  sheet outlines (not machined)
 
-export function buildJob(design, fab) {
+export function buildJob(rawDesign, fab) {
+  const design = withPins(rawDesign, fab);
   const R = design.stats.outerDiameter / 2;
   const k = (fab.process === 'laser' ? fab.kerf : 0) / 2;
   const job = { cut: { polys: [], circles: [] }, engrave: { arcs: [], polys: [], dots: [] }, labels: [], guides: [], notes: [] };
@@ -133,13 +199,9 @@ export function buildJob(design, fab) {
       for (const d of h.pads) job.engrave.dots.push({ x: d.x, y: d.y, r: d.r });
     }
   };
-  const addMounting = (outerR) => {
-    if (!fab.mounting) return;
-    const hr = Math.max(fab.process === 'cnc' ? fab.tool / 2 + 0.2 : 0, 2);
-    for (let i = 0; i < 4; i++) {
-      const a = (i / 4) * TAU + Math.PI / 4;
-      job.cut.circles.push({ x: (outerR - fab.border / 2) * Math.cos(a), y: (outerR - fab.border / 2) * Math.sin(a), r: hr - k });
-    }
+  const addMounting = (force = false) => {
+    if (!fab.mounting && !force) return;
+    for (const h of alignmentHoles(design, fab)) job.cut.circles.push({ ...h, r: h.r - k });
   };
 
   switch (fab.layout) {
@@ -148,7 +210,7 @@ export function buildJob(design, fab) {
       job.cut.circles.push({ x: 0, y: 0, r: outer + k });
       for (const p of design.parts) job.cut.polys.push(offsetPolygon(p.points, -k));
       addTraces();
-      addMounting(outer);
+      addMounting();
       job.bounds = square(outer + 2);
       job.notes.push('Plate stays in one piece; parts are cut out of it as windows.');
       break;
@@ -156,12 +218,26 @@ export function buildJob(design, fab) {
     case 'backer': {
       const outer = R + fab.border;
       job.cut.circles.push({ x: 0, y: 0, r: outer + k });
-      for (const p of design.parts) job.engrave.polys.push(p.points);
+      for (const p of design.parts) {
+        job.engrave.polys.push(p.points);
+        for (const h of p.holes) if (h.kind === 'pin') job.cut.circles.push({ x: h.x, y: h.y, r: h.r - k });
+      }
       addTraces();
-      addMounting(outer);
+      addMounting();
       if (fab.labels) for (const p of design.parts) job.labels.push({ x: p.label[0], y: p.label[1], text: p.id, size: labelSize });
       job.bounds = square(outer + 2);
-      job.notes.push('Backer is engraved with every part outline for glue-up registration.');
+      job.notes.push(fab.pins ? 'Backer has a pin hole under every part pin, plus engraved outlines.' : 'Backer is engraved with every part outline.');
+      break;
+    }
+    case 'jig': {
+      // Stencil with slightly oversize windows; pinned to the backer it holds every part in place for gluing.
+      const outer = R + fab.border;
+      const clear = fab.jigClearance + k;
+      job.cut.circles.push({ x: 0, y: 0, r: outer + k });
+      for (const p of design.parts) job.cut.polys.push(offsetPolygon(p.points, clear));
+      addMounting(true);
+      job.bounds = square(outer + 2);
+      job.notes.push(`Windows are ${fab.jigClearance} mm oversize. Align to the backer with pins through the four alignment holes.`);
       break;
     }
     case 'sheets':
@@ -174,7 +250,9 @@ export function buildJob(design, fab) {
         for (const h of p.holes) job.cut.circles.push({ x: h.x, y: h.y, r: h.r - k });
         if (fab.labels) job.labels.push({ x: p.label[0], y: p.label[1], text: p.id, size: labelSize });
       }
-      addTraces();
+      // traces sit in the gaps between parts, so on a cutter they belong on the backer
+      if (fab.process === 'plot') addTraces();
+      else if (design.hairlines.length && fab.engrave) job.notes.push('Traces are engraved on the Backer disc.');
       job.bounds = square(R * 1.02);
     }
   }
@@ -285,7 +363,8 @@ function packSheets(design, fab, k, job, labelSize) {
 
 // ------------------------------------------------------------------ checks
 
-export function checkDesign(design, fab) {
+export function checkDesign(rawDesign, fab) {
+  const design = withPins(rawDesign, fab);
   const pr = PROCESSES[fab.process];
   const p = design.params;
   const out = [];
@@ -333,8 +412,13 @@ export function checkDesign(design, fab) {
     add('warn', `${fmt(total)} mm only fits the bed's long axis — check your work area.`);
   } else add('ok', `Fits the ${fab.bedW}×${fab.bedH} bed.`);
 
-  if (fab.layout === 'assembled' && fab.process !== 'plot' && fab.process !== 'print') {
-    add('info', `${design.parts.length} loose parts — mount them on a Backer disc.`);
+  if (design.pinStats) {
+    const { pins, pinless } = design.pinStats;
+    if (pinless) add('warn', `${pinless} part${pinless > 1 ? 's are' : ' is'} too narrow for ${fab.pinD} mm pins — use a smaller pin or the Glue jig.`);
+    else add('ok', `${pins} locating pins (${fab.pinD} mm) — every part has its own.`);
+  }
+  if (fab.layout === 'jig' && p.gapWidth - 2 * fab.jigClearance < 1.5) {
+    add('warn', `Jig walls between windows are under 1.5 mm — widen Gap Width.`);
   }
   return out;
 }
