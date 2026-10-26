@@ -13,6 +13,7 @@ const VIEWS = {
 const MODE_KEYS = Object.keys(MODES);
 const VIEW_KEYS = Object.keys(VIEWS);
 const USER_PRESETS_KEY = 'orbis.presets';
+const EMBED = Boolean(window.ORBIS_EMBED);
 const LOCKS_KEY = 'orbis.locks';
 
 const state = {
@@ -61,6 +62,7 @@ function readHash() {
   state.params = params;
 }
 function writeHash() {
+  if (EMBED) return;
   const q = new URLSearchParams();
   for (const def of PARAMS) if (state.params[def.key] !== def.def) q.set(def.key, state.params[def.key]);
   if (state.palette !== 'circuit') q.set('palette', state.palette);
@@ -407,10 +409,30 @@ function fileBase() {
   return `orbis-s${p.seed}-r${p.rings}-${p.outerDiameter}mm`;
 }
 
+// Hosted embeds can't start downloads, so text formats go to the clipboard instead.
+async function copyText(text, label) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(`${label} copied to clipboard`);
+  } catch {
+    toast('Clipboard blocked — run Orbis locally to export');
+  }
+}
+
 async function doExport(kind) {
   const d = state.design;
   const base = fileBase();
   const bg = state.mode === 'plot' ? '#f1ece1' : '#0b0f14';
+  if (EMBED) {
+    const text = {
+      'cut-svg': () => cutSVG(d),
+      dxf: () => toDXF(d),
+      'art-svg': () => artSVG(d, { palette: state.palette, mode: state.mode, background: bg }),
+      json: () => JSON.stringify({ app: 'orbis', version: 1, palette: state.palette, mode: state.mode, params: state.params }, null, 2),
+    }[kind];
+    if (text) copyText(text(), kind.toUpperCase());
+    return;
+  }
   switch (kind) {
     case 'cut-svg':
       download(`${base}-cut.svg`, cutSVG(d), 'image/svg+xml');
@@ -467,6 +489,10 @@ function toast(msg) {
 const cycle = (keys, cur) => keys[(keys.indexOf(cur) + 1) % keys.length];
 
 function bindUI() {
+  if (EMBED) {
+    for (const kind of ['png', 'link']) $(`[data-export="${kind}"]`).hidden = true;
+    document.querySelectorAll('[data-export]').forEach((b) => (b.textContent = `Copy ${b.textContent}`));
+  }
   $('#btnRandom').addEventListener('click', randomize);
   $('#btnMutate').addEventListener('click', mutate);
   $('#btnSeed').addEventListener('click', newSeed);
@@ -480,7 +506,8 @@ function bindUI() {
     $('#btnDeletePreset').disabled = !e.target.value.startsWith('u:');
   });
   $('#btnSavePreset').addEventListener('click', () => {
-    const name = prompt('Preset name', `Seed ${state.params.seed}`)?.trim();
+    const fallback = `Seed ${state.params.seed} · ${state.params.rings} rings`;
+    const name = (EMBED ? fallback : prompt('Preset name', fallback))?.trim();
     if (!name) return;
     const user = userPresets();
     user[name] = { params: { ...state.params }, palette: state.palette, mode: state.mode };
