@@ -110,7 +110,7 @@ function arcBand(r, w, a0, a1) {
 }
 
 // Closed prism between z0 and z1 for a polygon with holes; pushes [a, b, c] vertex triples.
-function extrude(out, outer, holes, z0, z1) {
+export function extrude(out, outer, holes, z0, z1) {
   const o = signedArea(outer) < 0 ? outer.slice().reverse() : outer;
   const hs = holes.map((h) => (signedArea(h) > 0 ? h.slice().reverse() : h));
   const { pts, tris } = triangulate(o, hs);
@@ -171,9 +171,12 @@ export function buildMesh(design, fab) {
 export function toSTL(design, fab, body = null) {
   // Fused prints need no pins: pegs inside pin holes would only leave ring-shaped voids.
   const tris = body ? buildBodies(design, fab)[body] : buildMesh(design, { ...fab, pins: false });
+  return trisToSTL(tris);
+}
+
+export function trisToSTL(tris, header = 'Orbis circular circuit relief (mm)') {
   const buf = new ArrayBuffer(84 + tris.length * 50);
   const dv = new DataView(buf);
-  const header = 'Orbis circular circuit relief (mm)';
   for (let i = 0; i < header.length; i++) dv.setUint8(i, header.charCodeAt(i));
   dv.setUint32(80, tris.length, true);
   let off = 84;

@@ -15,9 +15,13 @@ The **Stage** workspace turns the disc into the centrepiece of a festival stage 
 
 - **Everything is a flat panel placed in 3D.** Each part keeps its flat cut shape plus a position, so panels can stand off the back plane, step forward or back, or tilt into folded forms. Drag the view to orbit.
 - **Source pieces**: one origin cell and one origin petal are shown on their own; every instance on the stage is spawned from them.
-- **Modules**: *Stepped* (nested frames stepping forward, or back for a portal look), *Folded* (each cell becomes a pyramid of tilted faces, cut at true size), or *Flat* with raised islands.
+- **Modules**: *Stepped* (nested frames stepping forward, or back for a portal look), *Folded* (each cell becomes a pyramid of tilted faces, cut at true size), *Scales* (panels hinged up from their inner edge like shingles), or *Flat* with raised islands.
 - **Fretwork**: window (frame for diffuser), nested slots, fan, slat fan, louvre, halftone perforation, or a mix by ring. A minimum web is always kept. *Backlit* lights every cutout.
-- **Centre and medallions**: your Disc design as a layered medallion (ring-by-ring stand-off), optional side medallions, or an open portal instead of a disc.
+- **Cores**: your Disc design as a layered medallion, Iris (radial segments), Star, Rosette (a ring of hexagons round a centre), a Void, or no core at all. *Core Gap* opens a clear ring between the core and everything around it. Side medallions use the same core type.
+- **Forms**: Flat, Dome, Barrel, Cone or Ripple, pushed out or in. Panels stay flat: each sits on the surface's tangent plane, and the Folded module turns the surface into true triangular facets.
+- **Spikes**: long kites radiating from behind the lattice, for sunbursts and horns.
+- **Presets and variations**: ten starting points (Hive Shield, Stargate, Geodesic Pod, Dragon Scales…) and a strip of one-click variations.
+- **3D printing**: choose what to print instead of cut (core, petals, spikes, or everything that fits), set the bed size (245 mm by default, up to 2000) and thickness. Parts that fit leave the CNC sheets and export as one STL each.
 - **Petal ring**: convex leaf or flame petals fanned around the centre, in up to three stacked layers with an eye.
 - **Panel lattice**: Hex, Diamond, Shard or Brick tilings in polar space, a crown silhouette, shadow gaps, edge erosion, and automatic subdivision of any cell too big for a sheet.
 - **DJ booth** front, stage deck (2×1 m modules) and an indicative goalpost truss, with 1.75 m figures for scale.

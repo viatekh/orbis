@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateStage, sourcePanels, world, STAGE_DEFAULTS, TILINGS, MODULES, MOTIFS, normalizeStage } from '../src/stage.js';
-import { stageJob, checkStage, settingOutCSV } from '../src/stagefab.js';
+import { stageJob, checkStage, settingOutCSV, printFiles } from '../src/stagefab.js';
+import { STAGE_PRESETS } from '../src/stagepresets.js';
+import { CENTRES, FORMS } from '../src/stage.js';
 import { elevationSVG, sourceSVG } from '../src/stagerender.js';
 import { DEFAULTS } from '../src/generator.js';
 import { signedArea } from '../src/fabrication.js';
@@ -31,10 +33,10 @@ test('mirrored stage is symmetric; nothing below the deck or outside the stage',
   for (const tiling of tilings) {
     for (const module of modules) {
       const stage = generateStage({ ...STAGE_DEFAULTS, tiling, module }, DEFAULTS);
-      for (const el of ['facade', 'petal', 'disc']) {
+      for (const el of ['facade', 'petal', 'core']) {
         const set = stage.parts.filter((p) => p.el === el);
         assert.ok(set.length > 5, `${tiling} ${module} ${el}`);
-        if (el !== 'disc') assert.equal(set.filter((p) => centreX(p) > 1).length, set.filter((p) => centreX(p) < -1).length, `${tiling} ${module} ${el}`);
+        if (el !== 'core') assert.equal(set.filter((p) => centreX(p) > 1).length, set.filter((p) => centreX(p) < -1).length, `${tiling} ${module} ${el}`);
       }
       for (const p of stage.parts) {
         for (const q of p.points) {
@@ -59,7 +61,7 @@ test('fretwork stays inside its panel and leaves a web', () => {
   for (const motif of Object.keys(MOTIFS)) {
     for (const module of modules) {
       const stage = generateStage({ ...STAGE_DEFAULTS, motif, module, detail: 1 }, DEFAULTS);
-      const panels = stage.parts.filter((p) => p.el !== 'disc');
+      const panels = stage.parts.filter((p) => p.el !== 'core');
       if (motif !== 'solid') assert.ok(panels.some((p) => p.cuts.length + p.holes.length > 0), motif);
       for (const p of panels) {
         for (const cut of p.cuts) for (const [x, y] of cut) assert.ok(edgeDist(p.points, x, y) > 25, `${motif}/${module} cut too close to edge of panel ${p.id}`);
@@ -90,7 +92,7 @@ test('petals, medallions and open portal', () => {
   assert.equal(base.traces.length, 3);
   assert.equal(generateStage({ ...STAGE_DEFAULTS, petals: 0 }, DEFAULTS).parts.filter((p) => p.el === 'petal').length, 0);
   const open = generateStage({ ...STAGE_DEFAULTS, centre: 'opening', sideDisc: 0 }, DEFAULTS);
-  assert.equal(open.parts.filter((p) => p.el === 'disc').length, 0);
+  assert.equal(open.parts.filter((p) => p.el === 'core').length, 0);
   const swirl = generateStage({ ...STAGE_DEFAULTS, mirror: false }, DEFAULTS);
   assert.ok(swirl.parts.filter((p) => p.el === 'petal').length > 20);
 });
@@ -114,4 +116,41 @@ test('checks, drawings, source preview and setting-out list', () => {
   assert.ok(!sourceSVG(src.cell).includes('NaN'));
   const n = normalizeStage({ width: 999, tiling: 'nope', module: 'nope', backlit: 'yes' });
   assert.deepEqual([n.width, n.tiling, n.module, n.backlit], [30, 'hex', 'stepped', true]);
+});
+
+test('every core, form and preset builds panels that fit a sheet', () => {
+  const builds = [
+    ...Object.keys(CENTRES).map((centre) => ({ centre })),
+    ...Object.keys(FORMS).flatMap((form) => [{ form, formDepth: 3, module: 'pyramid' }, { form, formDepth: -3, module: 'scales' }, { form, formDepth: 2, module: 'stepped' }]),
+    ...Object.values(STAGE_PRESETS),
+  ];
+  for (const over of builds) {
+    const stage = generateStage({ ...STAGE_DEFAULTS, ...over }, DEFAULTS);
+    assert.ok(stage.parts.length > 20, JSON.stringify(over));
+    for (const p of stage.parts) for (const q of p.points) assert.ok(world(p, q).every(Number.isFinite), JSON.stringify(over));
+    assert.equal(stageJob(stage).oversize, 0, JSON.stringify(over));
+    assert.ok(!elevationSVG(stage, { yaw: 30, pitch: 20 }).includes('NaN'));
+  }
+  assert.equal(generateStage({ ...STAGE_DEFAULTS, centre: 'none', sideDisc: 0 }, DEFAULTS).parts.filter((p) => p.el === 'core').length, 0);
+  const gap = (coreGap) => Math.min(...generateStage({ ...STAGE_DEFAULTS, centre: 'opening', petals: 0, coreGap }, DEFAULTS).parts.filter((p) => p.el === 'facade').flatMap((p) => p.points.map((q) => Math.hypot(world(p, q)[0], world(p, q)[1] + 4500))));
+  assert.ok(gap(800) > gap(0) + 700);
+  const dome = generateStage({ ...STAGE_DEFAULTS, form: 'dome', formDepth: 3 }, DEFAULTS);
+  assert.ok(dome.stats.reliefMm > 2000);
+});
+
+test('3D printing takes parts that fit the bed off the CNC sheets', () => {
+  const none = generateStage(STAGE_DEFAULTS, DEFAULTS);
+  assert.equal(none.stats.printed, 0);
+  assert.equal(printFiles(none).length, 0);
+  const small = generateStage(STAGE_DEFAULTS, DEFAULTS, { printSet: 'fit', printBed: 245 });
+  const big = generateStage(STAGE_DEFAULTS, DEFAULTS, { printSet: 'fit', printBed: 800 });
+  assert.ok(big.stats.printed > small.stats.printed);
+  assert.ok(big.stats.printed > 50 && big.stats.printKg > 1);
+  assert.equal(stageJob(big).cut.polys.length, big.parts.length - big.stats.printed);
+  const files = printFiles(big);
+  assert.equal(files.length, big.stats.printed);
+  const dv = new DataView(files[0].data);
+  assert.equal(files[0].data.byteLength, 84 + dv.getUint32(80, true) * 50);
+  const petals = generateStage(STAGE_DEFAULTS, DEFAULTS, { printSet: 'petal', printBed: 800 });
+  assert.ok(petals.parts.filter((p) => p.print).every((p) => p.el === 'petal'));
 });

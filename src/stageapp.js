@@ -6,10 +6,11 @@ import { MATERIALS } from './fabrication.js';
 import { jobSVG, jobDXF } from './export.js';
 import { zip } from './zip.js';
 import {
-  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, TILINGS, MODULES, MOTIFS, CENTRES, STAGE_MATERIALS,
+  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, TILINGS, MODULES, MOTIFS, CENTRES, FORMS, PRINT_SETS, STAGE_MATERIALS,
   normalizeStage, normalizeStageFab, generateStage, sourcePanels,
 } from './stage.js';
-import { stageJob, checkStage, settingOutCSV } from './stagefab.js';
+import { stageJob, checkStage, settingOutCSV, printFiles } from './stagefab.js';
+import { STAGE_PRESETS } from './stagepresets.js';
 import { elevationSVG, elevationBox, skyColor, sourceSVG, STAGE_MODES } from './stagerender.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -50,7 +51,10 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     document.body.dataset.mode = ws;
     document.querySelectorAll('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.ws === ws));
     write(MODE_KEY, ws);
-    if (ws === 'stage') render();
+    if (ws === 'stage') {
+      render();
+      renderVariations();
+    }
     else window.dispatchEvent(new Event('resize'));
   };
   $('#modeSeg').addEventListener('click', (e) => {
@@ -80,7 +84,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     }
     host.appendChild(det);
   }
-  const SELECTS = { tiling: TILINGS, module: MODULES, motif: MOTIFS, centre: CENTRES };
+  const SELECTS = { tiling: TILINGS, module: MODULES, motif: MOTIFS, centre: CENTRES, form: FORMS };
   const CHECKS = ['mirror', 'backlit', 'truss'];
   for (const [key, set] of Object.entries(SELECTS)) {
     $(`#st-${key}`).innerHTML = Object.entries(set).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
@@ -100,11 +104,12 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     }
     for (const key of Object.keys(SELECTS)) $(`#st-${key}`).value = state.params[key];
     for (const key of CHECKS) $(`#st-${key}`).checked = state.params[key];
-    for (const key of ['sheetW', 'sheetH', 'thickness', 'tool']) {
+    for (const key of ['sheetW', 'sheetH', 'thickness', 'tool', 'printBed', 'printThickness']) {
       const el = $(`#st-${key}`);
       if (document.activeElement !== el) el.value = state.fab[key];
     }
     $('#st-material').value = state.fab.material;
+    $('#st-printSet').value = state.fab.printSet;
     $('#st-labels').checked = state.fab.labels;
     $('#st-led').checked = state.fab.led;
     $('#st-palette').value = state.palette;
@@ -123,8 +128,19 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     render();
   }
 
-  for (const key of ['sheetW', 'sheetH', 'thickness', 'tool']) $(`#st-${key}`).addEventListener('change', (e) => setFab(key, e.target.value));
+  for (const key of ['sheetW', 'sheetH', 'thickness', 'tool', 'printBed', 'printThickness']) $(`#st-${key}`).addEventListener('change', (e) => setFab(key, e.target.value));
   $('#st-material').addEventListener('change', (e) => setFab('material', e.target.value));
+  $('#st-printSet').innerHTML = Object.entries(PRINT_SETS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  $('#st-printSet').addEventListener('change', (e) => setFab('printSet', e.target.value));
+  $('#st-preset').innerHTML = '<option value="">Presets…</option>' + Object.keys(STAGE_PRESETS).map((k) => `<option>${k}</option>`).join('');
+  $('#st-preset').addEventListener('change', (e) => {
+    const preset = STAGE_PRESETS[e.target.value];
+    e.target.value = '';
+    if (!preset) return;
+    state.params = normalizeStage({ ...STAGE_DEFAULTS, ...preset, seed: state.params.seed });
+    render();
+    renderVariations();
+  });
   $('#st-labels').addEventListener('change', (e) => setFab('labels', e.target.checked));
   $('#st-led').addEventListener('change', (e) => setFab('led', e.target.checked));
   $('#st-palette').addEventListener('change', (e) => {
@@ -144,6 +160,8 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     next.tiling = tilings[Math.floor(Math.random() * tilings.length)];
     const pick = (set) => Object.keys(set)[Math.floor(Math.random() * Object.keys(set).length)];
     next.module = pick(MODULES);
+    next.centre = pick(CENTRES);
+    next.form = Math.random() < 0.5 ? 'flat' : pick(FORMS);
     state.params = normalizeStage(next);
     render();
   });
@@ -197,18 +215,61 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     const hours = job.stats.minutes / 60;
     const rows = [
       ['Sheets', `${job.sheets} × ${stage.fab.sheetW}×${stage.fab.sheetH}`],
-      ['Panels', s.parts],
+      ['CNC panels', s.parts - s.printed],
       ['CNC time', `≈ ${hours < 1 ? `${Math.round(job.stats.minutes)} min` : `${hours.toFixed(1)} h`}`],
       ['Weight', `≈ ${Math.round(s.massKg)} kg`],
       ['LED run', stage.fab.led ? `≈ ${Math.round(s.ledM)} m` : '—'],
       ['Deck', `${s.deckModules} × 2×1 m`],
       ['Facade', `${s.areaM2.toFixed(1)} m²`],
       ['Relief', `${Math.round(s.reliefMm)} mm`],
+      ...(s.printed ? [['3D printed', `${s.printed} parts`], ['Filament', `≈ ${s.printKg.toFixed(1)} kg · ${Math.round(s.printHours)} h`]] : []),
     ];
     $('#stageEstimate').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
     $('#stagePreview').innerHTML = jobSVG(job, '', { preview: true });
     $('#stageMake').classList.remove('stale');
   }
+
+  // ------------------------------------------------------------ variations
+  const pickKey = (set, skip = []) => {
+    const keys = Object.keys(set).filter((k) => !skip.includes(k));
+    return keys[Math.floor(Math.random() * keys.length)];
+  };
+  const MUTATORS = [
+    (p) => [{ seed: Math.floor(Math.random() * 1000) }, 'New seed'],
+    (p) => { const v = pickKey(TILINGS, ['none', p.tiling]); return [{ tiling: v }, TILINGS[v]]; },
+    (p) => { const v = pickKey(MODULES, [p.module]); return [{ module: v }, MODULES[v]]; },
+    (p) => { const v = pickKey(CENTRES, [p.centre]); return [{ centre: v }, `Core: ${CENTRES[v]}`]; },
+    (p) => { const v = pickKey(FORMS, ['flat', p.form]); const d = Math.random() < 0.5 ? -2 : 2; return [{ form: v, formDepth: d }, `${FORMS[v]} ${d > 0 ? 'out' : 'in'}`]; },
+    (p) => { const v = pickKey(MOTIFS, [p.motif]); return [{ motif: v }, MOTIFS[v]]; },
+    (p) => [{ depth: -p.depth || -250 }, p.depth > 0 ? 'Recessed' : 'Raised'],
+    (p) => [{ petals: p.petals ? 0 : 14, spikes: p.spikes ? 0 : 12 }, 'Swap petals / spikes'],
+    (p) => [{ cells: 14 + 2 * Math.floor(Math.random() * 12), crownPoints: Math.floor(Math.random() * 8) }, 'Lattice scale'],
+  ];
+  let varRun = 0;
+  function renderVariations() {
+    const run = ++varRun;
+    const host = $('#stageVariations');
+    host.innerHTML = '';
+    const picks = MUTATORS.slice().sort(() => Math.random() - 0.5).slice(0, 6);
+    // one thumbnail per tick so the page stays responsive
+    const next = (i) => {
+      if (run !== varRun || i >= picks.length || document.body.dataset.mode !== 'stage') return;
+      const [delta, label] = picks[i](state.params);
+      const params = normalizeStage({ ...state.params, ...delta });
+      const b = document.createElement('button');
+      b.className = 'var';
+      b.innerHTML = `${elevationSVG(generateStage(params, getDisc(), state.fab), { mode: state.mode === 'setout' ? 'night' : state.mode, ...look(), draft: true })}<span><em>${label}</em></span>`;
+      b.addEventListener('click', () => {
+        state.params = params;
+        render();
+        renderVariations();
+      });
+      host.appendChild(b);
+      setTimeout(() => next(i + 1), 30);
+    };
+    setTimeout(() => next(0), 400);
+  }
+  $('#btnStageShuffle').addEventListener('click', renderVariations);
 
   // ------------------------------------------------------------ orbit
   const frame = $('#elevation').parentElement;
@@ -276,6 +337,8 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
       '  elevation-night.svg / elevation-day.svg   Visuals.',
       '  stage.json              Settings, to reload the design.',
       '',
+      '  print/                  One STL per 3D-printed part, flat on the bed (only if printing is switched on).',
+      '',
       'BUILD',
       '  1. Cut the sheets. Panel numbers are engraved on each part and match the setting-out drawing.',
       '  2. Fix panels to the support structure using the setting-out positions, working outward from the centreline.',
@@ -298,6 +361,11 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
         return saveZipped(`${base}-cut-sheets.dxf`, jobDXF(job), 'application/dxf');
       case 'elevation':
         return saveFile(`${base}-${state.mode}.svg`, elevation(), 'image/svg+xml');
+      case 'stl': {
+        const files = printFiles(state.stage);
+        if (!files.length) return toast('Nothing is set to print: choose what to print under 3D print');
+        return saveFile(`${base}-print.zip`, zip(files), 'application/zip');
+      }
       case 'json':
         return saveFile(`${base}.json`, settings(), 'application/json');
       case 'kit':
@@ -312,6 +380,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
             { name: `${base}/view-3d.svg`, data: elevation('night', { yaw: -32, pitch: 16 }) },
             { name: `${base}/elevation-day.svg`, data: elevation('day', FRONT) },
             { name: `${base}/stage.json`, data: settings() },
+            ...printFiles(state.stage).map((f) => ({ name: `${base}/print/${f.name}`, data: f.data })),
             { name: `${base}/README.txt`, data: readme() },
           ]),
           'application/zip',

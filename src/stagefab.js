@@ -3,6 +3,7 @@
 
 import { buildJob } from './fabrication.js';
 import { world } from './stage.js';
+import { extrude, trisToSTL } from './mesh.js';
 
 // Nesting runs on a 5 mm grid: full-size sheets at 1 mm would be needlessly slow.
 const Q = 5;
@@ -10,7 +11,7 @@ const Q = 5;
 export function stageJob(stage) {
   const fab = stage.fab;
   const small = {
-    parts: stage.parts.map((p) => ({
+    parts: stage.parts.filter((p) => !p.print).map((p) => ({
       id: p.id,
       points: p.points.map(([x, y]) => [x / Q, y / Q]),
       holes: p.holes.map((h) => ({ x: h.x / Q, y: h.y / Q, r: h.r / Q })),
@@ -57,8 +58,12 @@ export function checkStage(stage, job) {
   const fmt = (n) => (Math.round(n * 10) / 10).toString();
 
   if (job.oversize) add('fail', `${job.oversize} panel${job.oversize > 1 ? 's are' : ' is'} larger than a ${fab.sheetW}×${fab.sheetH} sheet.`);
-  else add('ok', `${stats.parts} panels nest onto ${job.sheets} sheet${job.sheets > 1 ? 's' : ''} of ${fab.sheetW}×${fab.sheetH}.`);
+  else add('ok', `${stats.parts - stats.printed} panels nest onto ${job.sheets} sheet${job.sheets > 1 ? 's' : ''} of ${fab.sheetW}×${fab.sheetH}.`);
 
+  if (fab.printSet !== 'none') {
+    if (stats.printed) add('ok', `${stats.printed} parts print on a ${fab.printBed} mm bed, ${fab.printThickness} mm thick.`);
+    if (stats.printSkipped) add(stats.printed ? 'info' : 'warn', `${stats.printSkipped} chosen parts are larger than the ${fab.printBed} mm bed and stay on the CNC sheets.`);
+  }
   const holes = stage.parts.flatMap((pt) => pt.holes);
   const small = holes.filter((h) => h.r * 2 < fab.tool * 1.1).length;
   if (small) add('fail', `${small} round cutouts are smaller than the ${fab.tool} mm bit — use a smaller bit or a larger disc.`);
@@ -89,4 +94,19 @@ export function settingOutCSV(stage) {
     rows.push([pt.id, pt.el, Math.round((x0 + x1) / 2), Math.round(-(y0 + y1) / 2), Math.round((z0 + z1) / 2), Math.round(x1 - x0), Math.round(y1 - y0), pt.tilted ? 'yes' : 'no', pt.holes.length + pt.cuts.length].join(','));
   }
   return rows.join('\n') + '\n';
+}
+
+// One STL per printed part: its flat shape extruded to the print thickness, lying on the bed.
+export function printFiles(stage) {
+  const circle = (h) => Array.from({ length: 32 }, (_, i) => [h.x + h.r * Math.cos((i * Math.PI) / 16), h.y + h.r * Math.sin((i * Math.PI) / 16)]);
+  return stage.parts
+    .filter((pt) => pt.print)
+    .map((pt) => {
+      const x0 = Math.min(...pt.points.map((q) => q[0]));
+      const y0 = Math.min(...pt.points.map((q) => q[1]));
+      const shift = (poly) => poly.map(([x, y]) => [x - x0, y - y0]);
+      const tris = [];
+      extrude(tris, shift(pt.points), [...(pt.cuts || []).map(shift), ...pt.holes.map((h) => shift(circle(h)))], 0, stage.fab.printThickness);
+      return { name: `panel-${pt.id}-${pt.el}.stl`, data: trisToSTL(tris, `Orbis stage panel ${pt.id} (mm)`).buffer };
+    });
 }

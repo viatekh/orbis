@@ -356,3 +356,7 @@ body[data-mode='stage'] .disc-only, body:not([data-mode='stage']) .stage-only { 
 .stage-hud .seg { background: rgba(20, 24, 26, 0.82); border-color: rgba(255, 255, 255, 0.16); }
 .stage-hud .seg button { color: #c9d1cd; }
 .stage-hud .seg button.on { color: var(--accent-ink); }
+#stageVariations { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+#stageVariations .var { aspect-ratio: 16 / 10; }
+#stageVariations .var svg { inset: 0 0 22px; width: 100%; height: calc(100% - 22px); }
+#stageExports { grid-template-columns: repeat(2, 1fr); }

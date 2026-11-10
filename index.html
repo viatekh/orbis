@@ -156,6 +156,7 @@
   <main class="work stage-only" id="stageWork">
     <aside class="col design-col" aria-label="Stage design">
       <div class="col-head"><h2>Stage</h2><span class="file" id="stageName"></span></div>
+      <div class="preset-row"><select id="st-preset" aria-label="Stage preset"></select></div>
       <div class="source">
         <div class="source-view" id="sourceCell" title="The origin cell: every lattice panel is spawned from this"></div>
         <div class="source-view" id="sourcePetal" title="The origin petal"></div>
@@ -165,7 +166,8 @@
         <label class="f"><span>Tiling</span><select id="st-tiling"></select></label>
         <label class="f"><span>Module</span><select id="st-module"></select></label>
         <label class="f"><span>Fretwork</span><select id="st-motif"></select></label>
-        <label class="f"><span>Centre</span><select id="st-centre"></select></label>
+        <label class="f"><span>Core</span><select id="st-centre"></select></label>
+        <label class="f wide"><span>Form</span><select id="st-form"></select></label>
       </div>
       <div class="checks-row">
         <label class="check"><input type="checkbox" id="st-mirror" /> Mirror</label>
@@ -185,6 +187,8 @@
           <div class="seg small" id="stageViewSeg" role="group" aria-label="Camera"><button data-cam="front">Front</button><button data-cam="orbit">3D</button></div>
         </div>
       </div>
+      <div class="vars-head"><h2>Variations</h2><button id="btnStageShuffle" class="ghost" title="New variations">Shuffle</button></div>
+      <div class="variations" id="stageVariations"></div>
       <p class="note">To scale; figures are 1.75 m. Drag to orbit. Every panel is sized to cut from one sheet; cells too big for a sheet are subdivided automatically.</p>
     </section>
 
@@ -201,6 +205,14 @@
         <label class="check"><input type="checkbox" id="st-labels" /> Panel numbers</label>
         <label class="check"><input type="checkbox" id="st-led" /> LED edges</label>
       </div>
+      <div class="sub">
+        <h3>3D print</h3>
+        <div class="fields">
+          <label class="f wide"><span>Print instead of cut</span><select id="st-printSet"></select></label>
+          <label class="f"><span>Bed size</span><b><input id="st-printBed" type="number" min="100" max="2000" step="5" /><em>mm</em></b></label>
+          <label class="f"><span>Print thickness</span><b><input id="st-printThickness" type="number" min="1" max="30" step="0.5" /><em>mm</em></b></label>
+        </div>
+      </div>
       <div class="sub"><h3>Checks</h3><ul class="dfm" id="stageChecks"></ul></div>
       <div class="sub"><h3>Bill of materials</h3><dl class="estimate" id="stageEstimate"></dl></div>
       <div class="sub">
@@ -212,6 +224,7 @@
         <button data-sexport="sheets" title="Nested panels, 1:1 in mm">Sheets SVG</button>
         <button data-sexport="dxf" title="Nested panels as DXF R12">DXF</button>
         <button data-sexport="elevation" title="The elevation as shown">Elevation</button>
+        <button data-sexport="stl" title="One STL per printed part, zipped">Print STLs</button>
         <button data-sexport="json" title="Stage settings">JSON</button>
       </div>
       <label class="import">Import stage JSON<input type="file" id="stageImport" accept="application/json,.json" /></label>
