@@ -974,16 +974,16 @@ function petalLayers(P, p, ctx, t) {
 }
 
 // A curled petal: the same profiles as a straight one, swept along a bending spine.
-function curledPetal(p, ctx, base, phi, len, width) {
+function curledPetal(p, ctx, base, phi, len, width, curl = p.petalCurl) {
   const profile = p.petalShape === 'freeform' ? freeProfile(p.petalNodes) : RIBBON_PROFILES[p.petalShape] || RIBBON_PROFILES.leaf;
   const out = [];
   const K = p.petalLayers;
   for (let k = 0; k < K; k++) {
     const f = 1 - 0.2 * k;
-    const spine = makeSpine({ start: base, heading: phi, length: len * f, turn: (u) => p.petalCurl * 1.9 * (u * f) ** 1.3, step: 30 });
+    const spine = makeSpine({ start: base, heading: phi, length: len * f, turn: (u) => curl * 1.9 * (u * f) ** 1.3, step: 30 });
     const top = k === K - 1 && K > 1;
     const motif = p.motif === 'solid' ? 'solid' : top ? 'eyes' : k ? 'lanes' : p.ribbonMotif;
-    const pieces = ribbonParts(spine, widthOf((u) => profile(clamp(u * f, 0, 1)), width * (1 - 0.3 * k), p.petalAsym), ribbonOpts(p, ctx, motif));
+    const pieces = ribbonParts(spine, widthOf((u) => profile(clamp(u * f, 0, 1)), width * (1 - 0.3 * k), curl ? p.petalAsym : 0), ribbonOpts(p, ctx, motif));
     for (const { u, ...pc } of pieces) out.push({ ...pc, t: clamp(0.35 + k * 0.25, 0, 1), el: 'petal', layer: k, organic: true, z: k });
   }
   return out;
@@ -1006,10 +1006,11 @@ function buildPetals(p, ctx) {
     const base = [r0 * Math.sin(th), -cy - r0 * Math.cos(th)];
     const c = Math.cos(phi);
     const s = Math.sin(phi);
-    if (p.petalCurl && !axis) {
-      const made = curledPetal(p, ctx, base, phi, len, width).map(({ z, ...rest }) => ({ ...rest, frame: ctx.lift.frame(centroid(rest.points), ctx.zOf('petal') + z * step) }));
+    if (p.petalCurl) {
+      // petals on the centreline stay straight and symmetric, but are built the same way so they match
+      const made = curledPetal(p, ctx, base, phi, len, width, axis ? 0 : p.petalCurl).map(({ z, ...rest }) => ({ ...rest, frame: ctx.lift.frame(centroid(rest.points), ctx.zOf('petal') + z * step) }));
       parts.push(...made);
-      if (p.mirror) parts.push(...made.map(mirrorPart));
+      if (p.mirror && !axis) parts.push(...made.map(mirrorPart));
       continue;
     }
     const raw = petalShape(len, width, axis ? 0 : p.petalAsym, p.petalShape, p.petalNodes).map(([x, y]) => [base[0] + x * c - y * s, base[1] + x * s + y * c]);
