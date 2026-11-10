@@ -26,10 +26,11 @@ The **Make** panel turns the design into something a machine can produce.
 - **Estimates**: machine or print time, weight from material density, pierce count and depth passes.
 - **Cut layouts**
   - *Assembled*: as designed.
-  - *Nested sheets*: each part is rotated to its tightest bounding box and packed onto bed-sized sheets, with optional engraved part numbers.
+  - *Nested sheets*: parts are rotated and dropped onto a skyline using their real profiles, so arcs spoon into each other. Optional engraved part numbers.
   - *Stencil plate*: one connected disc with the parts cut out as windows.
   - *Backer disc*: a mounting disc with pin holes, engraved part outlines and the traces.
   - *Jig*: a glue-up jig with oversize windows that locates every part on the backer.
+- **Fit design to bed**: rescales every length in the design, keeping machine limits fixed.
 - **Kerf compensation** (laser): part outlines grow and holes shrink by half the kerf.
 
 ## Putting it together
@@ -46,7 +47,7 @@ Separate parts are useless if you can't line them up, so every design comes with
 
 | Format | Contents |
 | --- | --- |
-| SVG | True mm size. Layers `CUT` (#ff0000), `ENGRAVE` (#0000ff), `LABELS`, `GUIDES` (sheet outlines; don't cut). Follows the LightBurn / Glowforge colour convention. |
+| SVG | True mm size. Layers in machining order: `1-ENGRAVE` (blue), `2-LABELS` (black, single-stroke digits), `3-CUT-INNER` (magenta: holes, windows, pin holes), `4-CUT-OUTLINE` (red), plus `GUIDES` (sheet outlines; don't cut). Inner cuts have their own colour so they can run before the outlines. |
 | DXF | R12 in mm with the same layers. Opens in LightBurn, Fusion, VCarve, Illustrator and LibreCAD. |
 | STL | Binary, watertight relief: optional base disc with mounting holes, parts extruded per ring height, raised traces. |
 | Kit .zip | Parts, backer and glue jig as SVG + DXF (or STL bodies for print), settings JSON, and a README with build steps and checks. |

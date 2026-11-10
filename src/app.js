@@ -1,7 +1,7 @@
-import { PARAMS, PARAM_MAP, GROUPS, DEFAULTS, generate, normalizeParams, quantize } from './generator.js';
+import { PARAMS, PARAM_MAP, GROUPS, DEFAULTS, generate, normalizeParams, quantize, scaleParams } from './generator.js';
 import { PALETTES, MODES, ringsMarkup, designSVG, viewBox, paletteColor, matGridSVG } from './render.js';
 import { fabSVG, jobSVG, artSVG, toDXF, svgToPngBlob, download, paramsComment } from './export.js';
-import { PROCESSES, MATERIALS, LAYOUTS, PIN_SIZES, defaultFab, buildJob, checkDesign, estimate, withPins, assemblySteps } from './fabrication.js';
+import { PROCESSES, MATERIALS, LAYOUTS, PIN_SIZES, defaultFab, buildJob, checkDesign, estimate, withPins, assemblySteps, normalizeFab, fitDiameter } from './fabrication.js';
 import { toSTL } from './mesh.js';
 import { zip } from './zip.js';
 import { makeVariations } from './variations.js';
@@ -25,7 +25,7 @@ const LOCK_SVG = (on) =>
 
 const state = {
   params: { ...DEFAULTS },
-  fab: { ...defaultFab('laser'), ...load(FAB_KEY, {}) },
+  fab: normalizeFab(load(FAB_KEY, {})),
   palette: 'circuit',
   mode: 'material',
   view: 'top',
@@ -214,6 +214,16 @@ function setProcess(proc) {
   }
   else if (state.mode === 'plot') state.mode = 'material';
   commit();
+}
+
+// Resize the whole design so it fits the bed for the current process and layout.
+function fitToBed() {
+  const target = Math.floor(fitDiameter(state.fab) / 10) * 10;
+  const def = PARAM_MAP.outerDiameter;
+  if (target < def.min) return toast(`Bed is too small: the smallest design is ${def.min} mm`);
+  if (target === state.params.outerDiameter) return toast('Already sized to the bed');
+  setParams(scaleParams(state.params, target / state.params.outerDiameter));
+  toast(`Scaled to Ø ${target} mm`);
 }
 
 function setFab(key, value) {
@@ -532,7 +542,7 @@ function applyPreset(value) {
   if (!preset) return;
   if (preset.palette) state.palette = preset.palette;
   if (preset.mode) state.mode = preset.mode;
-  if (preset.fab) state.fab = { ...state.fab, ...preset.fab };
+  if (preset.fab) state.fab = normalizeFab({ ...state.fab, ...preset.fab });
   setParams({ ...DEFAULTS, minHole: state.params.minHole, minWeb: state.params.minWeb, ...preset.params });
   toast(`Preset: ${name}`);
 }
@@ -560,7 +570,8 @@ function readme() {
     `Size:      Ø ${d.stats.outerDiameter} mm, ${d.stats.parts} parts, ${d.stats.cutouts} holes`,
     `Estimate:  ~${Math.round(e.minutes)} min, ~${Math.round(e.mass)} g`,
     '',
-    'Layers: CUT = red (#ff0000), ENGRAVE = blue (#0000ff), LABELS = black, GUIDES = green (sheet outlines, do not cut).',
+    'Layers, in machining order: 1-ENGRAVE blue (#0000ff), 2-LABELS black, 3-CUT-INNER magenta (#ff00ff), 4-CUT-OUTLINE red (#ff0000).',
+    'Run inner cuts before outlines so parts do not shift before their holes are cut. GUIDES (green) are sheet outlines: do not cut.',
     'All files are in millimetres. STL is Z-up.',
     '',
     'How it goes together:',
@@ -654,7 +665,7 @@ async function importJSON(file) {
     const data = JSON.parse(await file.text());
     if (PALETTES[data.palette]) state.palette = data.palette;
     if (MODES[data.mode]) state.mode = data.mode;
-    if (data.fab && PROCESSES[data.fab.process]) state.fab = { ...defaultFab(data.fab.process), ...data.fab };
+    if (data.fab && typeof data.fab === 'object') state.fab = normalizeFab(data.fab);
     setParams({ ...DEFAULTS, ...(data.params || data) });
     toast('Imported');
   } catch {
@@ -682,6 +693,7 @@ function bindUI() {
   $('#btnRedo').addEventListener('click', redo);
   $('#btnAnimate').addEventListener('click', toggleAnimate);
   $('#btnShuffle').addEventListener('click', renderVariations);
+  $('#btnFit').addEventListener('click', fitToBed);
   $('#preset').addEventListener('change', (e) => {
     applyPreset(e.target.value);
     $('#btnDeletePreset').disabled = !e.target.value.startsWith('u:');
@@ -741,7 +753,6 @@ function bindUI() {
 }
 
 // ---------------------------------------------------------------- boot
-if (!PROCESSES[state.fab.process]) state.fab = defaultFab('laser');
 state.params.minHole = PROCESSES[state.fab.process].minHole;
 state.params.minWeb = PROCESSES[state.fab.process].minWeb;
 readHash();

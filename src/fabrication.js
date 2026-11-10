@@ -72,6 +72,33 @@ export function defaultFab(process = 'laser') {
   };
 }
 
+// Settings arrive from localStorage, imported JSON and old versions: never trust them.
+const FAB_LIMITS = {
+  thickness: [0, 50], kerf: [0, 2], tool: [0.05, 25], bedW: [50, 3000], bedH: [50, 3000],
+  jigClearance: [0, 2], border: [4, 60], relief: [0.4, 30], ringStep: [-3, 3],
+};
+
+export function normalizeFab(input = {}) {
+  const process = PROCESSES[input.process] ? input.process : 'laser';
+  const def = defaultFab(process);
+  const out = { ...def };
+  for (const [key, [lo, hi]] of Object.entries(FAB_LIMITS)) {
+    const n = Number(input[key]);
+    if (input[key] !== undefined && input[key] !== '' && Number.isFinite(n)) out[key] = Math.min(hi, Math.max(lo, n));
+  }
+  if (PROCESSES[process].materials.includes(input.material)) out.material = input.material;
+  if (LAYOUTS[input.layout]) out.layout = input.layout;
+  if (PIN_SIZES.includes(Number(input.pinD))) out.pinD = Number(input.pinD);
+  for (const key of ['pins', 'engrave', 'labels', 'mounting', 'stlBase']) if (typeof input[key] === 'boolean') out[key] = input[key];
+  return out;
+}
+
+// Largest outer diameter that fits the bed for the current process and layout.
+export function fitDiameter(fab) {
+  const disc = fab.process === 'print' ? fab.stlBase : fab.layout !== 'assembled' && fab.layout !== 'sheets';
+  return Math.min(fab.bedW, fab.bedH) - (disc ? 2 * fab.border : 0) - 4;
+}
+
 // ------------------------------------------------------------------ geometry helpers
 
 export function signedArea(pts) {
@@ -180,7 +207,8 @@ export function assemblySteps(design, fab) {
 // ------------------------------------------------------------------ jobs
 //
 // A job is the toolpath-level description every exporter consumes:
-//   cut:     closed polylines and circles that go all the way through
+//   inner:   through-cuts made FIRST (holes, windows, pin holes), while the stock is still held
+//   cut:     outlines cut LAST, so nothing shifts or drops before its holes are done
 //   engrave: open arcs, closed polylines and filled dots (score / V-carve / ink)
 //   labels:  engraved part numbers
 //   guides:  sheet outlines (not machined)
@@ -189,7 +217,16 @@ export function buildJob(rawDesign, fab) {
   const design = withPins(rawDesign, fab);
   const R = design.stats.outerDiameter / 2;
   const k = (fab.process === 'laser' ? fab.kerf : 0) / 2;
-  const job = { cut: { polys: [], circles: [] }, engrave: { arcs: [], polys: [], dots: [] }, labels: [], guides: [], notes: [] };
+  const job = {
+    inner: { polys: [], circles: [] },
+    cut: { polys: [], circles: [] },
+    engrave: { arcs: [], polys: [], dots: [] },
+    labels: [],
+    guides: [],
+    notes: [],
+  };
+  // a kerf wider than the hole still leaves a hole: keep a pierce point
+  const hole = (c) => ({ x: c.x, y: c.y, r: Math.max(0.05, c.r - k) });
   const labelSize = Math.max(2.5, Math.min(5, minPartWidth(design) * 0.45));
 
   const addTraces = () => {
@@ -201,14 +238,14 @@ export function buildJob(rawDesign, fab) {
   };
   const addMounting = (force = false) => {
     if (!fab.mounting && !force) return;
-    for (const h of alignmentHoles(design, fab)) job.cut.circles.push({ ...h, r: h.r - k });
+    for (const h of alignmentHoles(design, fab)) job.inner.circles.push(hole(h));
   };
 
   switch (fab.layout) {
     case 'plate': {
       const outer = R + fab.border;
       job.cut.circles.push({ x: 0, y: 0, r: outer + k });
-      for (const p of design.parts) job.cut.polys.push(offsetPolygon(p.points, -k));
+      for (const p of design.parts) job.inner.polys.push(offsetPolygon(p.points, -k));
       addTraces();
       addMounting();
       job.bounds = square(outer + 2);
@@ -220,7 +257,7 @@ export function buildJob(rawDesign, fab) {
       job.cut.circles.push({ x: 0, y: 0, r: outer + k });
       for (const p of design.parts) {
         job.engrave.polys.push(p.points);
-        for (const h of p.holes) if (h.kind === 'pin') job.cut.circles.push({ x: h.x, y: h.y, r: h.r - k });
+        for (const h of p.holes) if (h.kind === 'pin') job.inner.circles.push(hole(h));
       }
       addTraces();
       addMounting();
@@ -234,7 +271,7 @@ export function buildJob(rawDesign, fab) {
       const outer = R + fab.border;
       const clear = fab.jigClearance + k;
       job.cut.circles.push({ x: 0, y: 0, r: outer + k });
-      for (const p of design.parts) job.cut.polys.push(offsetPolygon(p.points, clear));
+      for (const p of design.parts) job.inner.polys.push(offsetPolygon(p.points, clear));
       addMounting(true);
       job.bounds = square(outer + 2);
       job.notes.push(`Windows are ${fab.jigClearance} mm oversize. Align to the backer with pins through the four alignment holes.`);
@@ -247,7 +284,7 @@ export function buildJob(rawDesign, fab) {
     default: {
       for (const p of design.parts) {
         job.cut.polys.push(offsetPolygon(p.points, k));
-        for (const h of p.holes) job.cut.circles.push({ x: h.x, y: h.y, r: h.r - k });
+        for (const h of p.holes) job.inner.circles.push(hole(h));
         if (fab.labels) job.labels.push({ x: p.label[0], y: p.label[1], text: p.id, size: labelSize });
       }
       // traces sit in the gaps between parts, so on a cutter they belong on the backer
@@ -256,7 +293,26 @@ export function buildJob(rawDesign, fab) {
       job.bounds = square(R * 1.02);
     }
   }
+  job.stats = jobStats(job);
   return job;
+}
+
+const perimeter = (pts) => pts.reduce((s, p, i) => s + Math.hypot(p[0] - pts[(i + 1) % pts.length][0], p[1] - pts[(i + 1) % pts.length][1]), 0);
+
+// What the machine actually does for this sheet: drives the time estimate.
+function jobStats(job) {
+  let cut = 0;
+  let pierces = 0;
+  for (const g of [job.inner, job.cut]) {
+    for (const p of g.polys) cut += perimeter(p);
+    for (const c of g.circles) cut += TAU * c.r;
+    pierces += g.polys.length + g.circles.length;
+  }
+  let engrave = 0;
+  for (const a of job.engrave.arcs) engrave += a.r * (a.a1 - a.a0);
+  for (const p of job.engrave.polys) engrave += perimeter(p);
+  for (const d of job.engrave.dots) engrave += TAU * d.r;
+  return { cutLengthMm: cut, engraveLengthMm: engrave, pierces };
 }
 
 const square = (r) => ({ x: -r, y: -r, w: 2 * r, h: 2 * r });
@@ -265,65 +321,118 @@ function minPartWidth(design) {
   return design.parts.reduce((m, p) => Math.min(m, p.minWidth), Infinity);
 }
 
-// Rotate each part to its smallest bounding box, then shelf-pack onto bed-sized sheets.
+// Nesting. Each part is rotated to its tightest bounding box, then dropped onto a
+// per-sheet skyline (1 mm columns) using its true top and bottom profiles, so arcs
+// spoon into each other instead of each claiming a whole rectangle.
+function profile(pts, x0, cols, pad) {
+  const lo = new Float64Array(cols).fill(Infinity);
+  const hi = new Float64Array(cols).fill(-Infinity);
+  for (let i = 0; i < pts.length; i++) {
+    let [ax, ay] = pts[i];
+    let [bx, by] = pts[(i + 1) % pts.length];
+    if (ax > bx) [ax, ay, bx, by] = [bx, by, ax, ay];
+    const c0 = Math.max(0, Math.floor(ax - x0));
+    const c1 = Math.min(cols - 1, Math.floor(bx - x0));
+    for (let c = c0; c <= c1; c++) {
+      // the edge's y-range inside this column
+      const xa = Math.max(ax, x0 + c);
+      const xb = Math.min(bx, x0 + c + 1);
+      const ya = bx === ax ? ay : ay + ((by - ay) * (xa - ax)) / (bx - ax);
+      const yb = bx === ax ? by : ay + ((by - ay) * (xb - ax)) / (bx - ax);
+      lo[c] = Math.min(lo[c], ya, yb);
+      hi[c] = Math.max(hi[c], ya, yb);
+    }
+  }
+  // widen the underside by the part spacing so neighbours keep their distance sideways too
+  const hiP = new Float64Array(cols + 2 * pad).fill(-Infinity);
+  for (let c = 0; c < cols; c++) {
+    if (lo[c] === Infinity) continue;
+    for (let d = 0; d <= 2 * pad; d++) {
+      hiP[c + d] = Math.max(hiP[c + d], hi[c]);
+    }
+  }
+  return { lo, hi: hiP };
+}
+
+function orient(poly, a, pad) {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  const pts = poly.map((pt) => rot(pt, c, s));
+  const b = bbox(pts);
+  const cols = Math.max(1, Math.ceil(b.w));
+  return { a, b, cols, ...profile(pts.map(([x, y]) => [x, y - b.y0]), b.x0, cols, pad) };
+}
+
 function packSheets(design, fab, k, job, labelSize) {
   const margin = 5;
-  const gap = Math.max(fab.process === 'cnc' ? fab.tool * 1.5 : 0, 0) + 3;
-  const W = fab.bedW;
-  const H = fab.bedH;
+  const gap = Math.ceil((fab.process === 'cnc' ? fab.tool * 1.5 : 0) + 3);
+  const W = Math.floor(fab.bedW);
+  const H = Math.floor(fab.bedH);
+  const innerW = W - 2 * margin;
+  const innerH = H - 2 * margin;
 
   const items = design.parts.map((p) => {
     const poly = offsetPolygon(p.points, k);
     let best = null;
     for (let deg = 0; deg < 180; deg += 3) {
       const a = (deg * Math.PI) / 180;
-      const c = Math.cos(a);
-      const s = Math.sin(a);
-      const b = bbox(poly.map((pt) => rot(pt, c, s)));
+      const b = bbox(poly.map((pt) => rot(pt, Math.cos(a), Math.sin(a))));
       if (!best || b.w * b.h < best.b.w * best.b.h) best = { a, b };
     }
-    let { a, b } = best;
-    if (b.h > b.w) {
-      // lay long side horizontal
-      a += Math.PI / 2;
-      b = bbox(poly.map((pt) => rot(pt, Math.cos(a), Math.sin(a))));
-    }
-    return { p, poly, a, b };
+    let a = best.a + (best.b.h > best.b.w ? Math.PI / 2 : 0); // long side along the bed
+    let o = orient(poly, a, gap);
+    if (o.b.w > innerW && o.b.w <= innerH && o.b.h <= innerW) o = orient(poly, (a += Math.PI / 2), gap);
+    const fits = o.b.w <= innerW && o.b.h <= innerH;
+    // both ways up, so crescents can face whichever way nests deeper
+    return { p, poly, fits, options: fits ? [o, orient(poly, a + Math.PI, gap)] : [o] };
   });
-  items.sort((u, v) => v.b.h - u.b.h);
+  items.sort((u, v) => v.options[0].b.w * v.options[0].b.h - u.options[0].b.w * u.options[0].b.h);
 
   const sheets = [];
-  let sheet = null;
-  const newSheet = (w = W, h = H) => {
-    sheet = { w, h, x: margin, y: margin, shelfH: 0, items: [] };
+  const newSheet = () => {
+    const sheet = { w: W, h: H, sky: new Float64Array(W + 2 * gap).fill(margin - gap), items: [] };
     sheets.push(sheet);
+    return sheet;
   };
-  newSheet();
-  for (const it of items) {
-    let { w, h } = it.b;
-    if (w > W - 2 * margin || h > H - 2 * margin) {
-      if (h <= W - 2 * margin && w <= H - 2 * margin) {
-        it.a += Math.PI / 2;
-        it.b = bbox(it.poly.map((pt) => rot(pt, Math.cos(it.a), Math.sin(it.a))));
-        ({ w, h } = it.b);
-      } else {
-        const prev = sheet;
-        newSheet(w + 2 * margin, h + 2 * margin);
-        sheet.oversize = true;
-        sheet.items.push({ ...it, x: margin, y: margin });
-        sheet = prev;
-        continue;
+  // lowest resting position for one orientation on one sheet
+  const drop = (sheet, o) => {
+    let best = null;
+    for (let x = margin; x + o.b.w <= W - margin + 1e-9; x += 4) {
+      let y = margin;
+      for (let c = 0; c < o.lo.length; c++) {
+        if (o.lo[c] === Infinity) continue;
+        y = Math.max(y, sheet.sky[x + gap + c] + gap - o.lo[c]);
       }
+      if (y + o.b.h > H - margin) continue;
+      if (!best || y + o.b.h < best.bottom - 1e-9) best = { x, y, bottom: y + o.b.h };
     }
-    if (sheet.x + w > W - margin) {
-      sheet.y += sheet.shelfH + gap;
-      sheet.x = margin;
-      sheet.shelfH = 0;
+    return best;
+  };
+
+  for (const it of items) {
+    if (!it.fits) {
+      const o = it.options[0];
+      sheets.push({ w: o.b.w + 2 * margin, h: o.b.h + 2 * margin, oversize: true, items: [{ it, o, x: margin, y: margin }] });
+      continue;
     }
-    if (sheet.y + h > H - margin) newSheet();
-    sheet.items.push({ ...it, x: sheet.x, y: sheet.y });
-    sheet.x += w + gap;
-    sheet.shelfH = Math.max(sheet.shelfH, h);
+    let placed = null;
+    for (const sheet of sheets) {
+      if (sheet.oversize) continue;
+      for (const o of it.options) {
+        const d = drop(sheet, o);
+        if (d && (!placed || d.bottom < placed.d.bottom)) placed = { sheet, o, d };
+      }
+      if (placed) break;
+    }
+    if (!placed) {
+      const sheet = newSheet();
+      placed = { sheet, o: it.options[0], d: drop(sheet, it.options[0]) };
+    }
+    const { sheet, o, d } = placed;
+    for (let c = 0; c < o.hi.length; c++) {
+      if (o.hi[c] !== -Infinity) sheet.sky[d.x + c] = Math.max(sheet.sky[d.x + c], d.y + o.hi[c]);
+    }
+    sheet.items.push({ it, o, x: d.x, y: d.y });
   }
 
   // lay sheets out in a near-square grid so the file previews and imports sensibly
@@ -335,23 +444,23 @@ function packSheets(design, fab, k, job, labelSize) {
     const ox = (i % cols) * colW;
     const oy = Math.floor(i / cols) * rowH;
     job.guides.push({ x: ox, y: oy, w: s.w, h: s.h, oversize: !!s.oversize });
-    for (const it of s.items) {
-      const c = Math.cos(it.a);
-      const sn = Math.sin(it.a);
-      const tx = ox + it.x - it.b.x0;
-      const ty = oy + it.y - it.b.y0;
+    for (const { it, o, x, y } of s.items) {
+      const c = Math.cos(o.a);
+      const sn = Math.sin(o.a);
+      const tx = ox + x - o.b.x0;
+      const ty = oy + y - o.b.y0;
       const tf = (pt) => {
-        const [x, y] = rot(pt, c, sn);
-        return [x + tx, y + ty];
+        const [px, py] = rot(pt, c, sn);
+        return [px + tx, py + ty];
       };
       job.cut.polys.push(it.poly.map(tf));
       for (const h of it.p.holes) {
-        const [x, y] = tf([h.x, h.y]);
-        job.cut.circles.push({ x, y, r: h.r - k });
+        const [hx, hy] = tf([h.x, h.y]);
+        job.inner.circles.push({ x: hx, y: hy, r: Math.max(0.05, h.r - k) });
       }
       if (fab.labels) {
-        const [x, y] = tf(it.p.label);
-        job.labels.push({ x, y, text: it.p.id, size: labelSize });
+        const [lx, ly] = tf(it.p.label);
+        job.labels.push({ x: lx, y: ly, text: it.p.id, size: labelSize });
       }
     }
   });
@@ -398,16 +507,16 @@ export function checkDesign(rawDesign, fab) {
 
   const bedMax = Math.max(fab.bedW, fab.bedH);
   const bedMin = Math.min(fab.bedW, fab.bedH);
-  const total = fab.layout === 'plate' || fab.layout === 'backer' ? D + 2 * fab.border : D;
+  const total = ['plate', 'backer', 'jig'].includes(fab.layout) || (fab.process === 'print' && fab.stlBase) ? D + 2 * fab.border : D;
   if (fab.process === 'print') {
-    if (total > bedMin) add('fail', `${fmt(total)} mm disc won't fit the ${fab.bedW}×${fab.bedH} bed. Set Outer Ø to ${Math.floor(bedMin - (fab.stlBase ? 2 * fab.border : 0))} or less.`);
+    if (total > bedMin) add('fail', `${fmt(total)} mm disc won't fit the ${fab.bedW}×${fab.bedH} bed. Use Fit to bed, or set Outer Ø to ${Math.floor(fitDiameter(fab))} or less.`);
     else add('ok', `Fits the ${fab.bedW}×${fab.bedH} bed.`);
   } else if (fab.layout === 'sheets') {
     const job = buildJob(design, fab);
     if (job.oversize) add('fail', `${job.oversize} part${job.oversize > 1 ? 's are' : ' is'} larger than the bed.`);
     else add('ok', `Packs onto ${job.sheets} sheet${job.sheets > 1 ? 's' : ''} of ${fab.bedW}×${fab.bedH}.`);
   } else if (total > bedMin && total > bedMax) {
-    add('warn', `${fmt(total)} mm is larger than the ${fab.bedW}×${fab.bedH} bed. Switch layout to Nested sheets.`);
+    add('fail', `${fmt(total)} mm is larger than the ${fab.bedW}×${fab.bedH} bed. ${fab.layout === 'assembled' ? 'Switch to Nested sheets or use Fit to bed.' : 'Use Fit to bed.'}`);
   } else if (total > bedMin) {
     add('warn', `${fmt(total)} mm only fits the bed's long axis — check your work area.`);
   } else add('ok', `Fits the ${fab.bedW}×${fab.bedH} bed.`);
@@ -416,6 +525,12 @@ export function checkDesign(rawDesign, fab) {
     const { pins, pinless } = design.pinStats;
     if (pinless) add('warn', `${pinless} part${pinless > 1 ? 's are' : ' is'} too narrow for ${fab.pinD} mm pins — use a smaller pin or the Glue jig.`);
     else add('ok', `${pins} locating pins (${fab.pinD} mm) — every part has its own.`);
+  }
+  const discLayout = ['plate', 'backer', 'jig'].includes(fab.layout) || (fab.process === 'print' && fab.stlBase);
+  if (discLayout && (fab.mounting || fab.layout === 'jig')) {
+    const hr = alignmentHoles(design, fab)[0].r;
+    const need = 2 * hr + 2 * p.minWeb;
+    if (fab.border < need) add('fail', `Border (${fmt(fab.border)} mm) is too narrow for the ${fmt(hr * 2)} mm alignment holes — raise it to ${Math.ceil(need)}+.`);
   }
   if (fab.layout === 'jig' && p.gapWidth - 2 * fab.jigClearance < 1.5) {
     add('warn', `Jig walls between windows are under 1.5 mm — widen Gap Width.`);
@@ -441,15 +556,17 @@ export function estimate(design, fab) {
     out.minutes = (vol * infill) / 10 / 60; // ~10 mm³/s
     out.volume = vol;
   } else {
+    const js = buildJob(design, fab).stats;
     const passes = fab.process === 'cnc' ? Math.max(1, Math.ceil(fab.thickness / (fab.tool * 0.5))) : fab.process === 'laser' ? Math.max(1, Math.ceil(fab.thickness / 4)) : 1;
-    const engrave = fab.engrave ? s.engraveLengthMm : 0;
-    const secs = (s.cutLengthMm * passes) / pr.speed + pierces * pr.pierce + engrave / (pr.speed * (fab.process === 'laser' ? 3 : 1));
+    const secs = (js.cutLengthMm * passes) / pr.speed + js.pierces * pr.pierce + js.engraveLengthMm / (pr.speed * (fab.process === 'laser' ? 3 : 1));
     out.minutes = secs / 60;
     out.passes = passes;
+    out.cutLengthMm = js.cutLengthMm;
+    out.pierces = js.pierces;
     const disc = Math.PI * (s.outerDiameter / 2 + fab.border) ** 2;
-    const area = fab.layout === 'plate' ? disc - s.areaMm2 : fab.layout === 'backer' ? disc : s.areaMm2;
+    const area = fab.layout === 'plate' || fab.layout === 'jig' ? disc - s.areaMm2 : fab.layout === 'backer' ? disc : s.areaMm2;
     out.mass = (area * fab.thickness * mat.density) / 1000;
   }
-  out.pierces = pierces;
+  out.pierces ??= pierces;
   return out;
 }

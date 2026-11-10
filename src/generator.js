@@ -66,6 +66,19 @@ export function normalizeParams(input = {}) {
   return out;
 }
 
+// Styling lengths (notch runs, via sizes, pads) were tuned at this diameter and scale
+// with the design, so a resized design keeps its look.
+const REF_DIAMETER = 470;
+
+// Resize a design: every length parameter scales, machine limits stay put.
+export function scaleParams(params, factor) {
+  const out = { ...params };
+  for (const key of ['outerDiameter', 'innerRadius', 'gapWidth', 'edge', 'bubbleSpacing']) {
+    out[key] = quantize(PARAM_MAP[key], params[key] * factor);
+  }
+  return out;
+}
+
 const polar = (r, a) => [r * Math.cos(a), r * Math.sin(a)];
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -141,6 +154,7 @@ function buildRing(p, ring) {
 }
 
 function buildPiece(p, ring, a, b, delta, rng, k) {
+  const sc = p.outerDiameter / REF_DIAMETER;
   const { rIn, rOut } = ring;
   const w = rOut - rIn;
   const mid = (rIn + rOut) / 2;
@@ -151,15 +165,15 @@ function buildPiece(p, ring, a, b, delta, rng, k) {
   const notches = [];
   if (depth > 0.3 && p.notchDensity > 0) {
     const arcLen = (b - a) * mid;
-    const target = Math.min(10, Math.round(((p.notchDensity * arcLen) / 70) * (0.4 + rng() * 1.2)));
+    const target = Math.min(10, Math.round(((p.notchDensity * arcLen) / (70 * sc)) * (0.4 + rng() * 1.2)));
     for (let tries = 0; notches.length < target && tries < target * 5 + 4; tries++) {
       const side = rng() < 0.5 ? 'out' : 'in';
       const r = side === 'out' ? rOut : rIn;
       const lo = side === 'out' ? a + delta : a;
       const hi = side === 'out' ? b + delta : b;
       const t = depth / r;
-      const margin = (c + 2) / r + t;
-      const len = (2 * depth + 6 + rng() * Math.max(10, arcLen * 0.25)) / r;
+      const margin = (c + 2 * sc) / r + t;
+      const len = (2 * depth + 6 * sc + rng() * Math.max(10 * sc, arcLen * 0.25)) / r;
       let s;
       let e;
       if (rng() < 0.25) {
@@ -173,7 +187,7 @@ function buildPiece(p, ring, a, b, delta, rng, k) {
         s = lo + margin + rng() * room;
         e = s + len;
       }
-      const pad = (depth + 3) / mid;
+      const pad = (depth + 3 * sc) / mid;
       if (notches.some((nn) => s < nn.e + pad && e > nn.s - pad)) continue;
       notches.push({ side, s, e, depth, t });
     }
@@ -283,7 +297,7 @@ function buildPiece(p, ring, a, b, delta, rng, k) {
       );
     }
   } else if (rng() < p.viaDensity) {
-    const vr = Math.max(p.minHole / 2, Math.min(2.2, Math.max(0.8, w * 0.06)));
+    const vr = Math.max(p.minHole / 2, Math.min(2.2 * sc, Math.max(0.8 * sc, w * 0.06)));
     placeRow(
       Math.max(2 * vr + Math.max(p.minWeb, 2 * vr), p.bubbleSpacing * 0.55),
       (th) => {
@@ -336,7 +350,7 @@ function buildHairlines(p, rings) {
       const start = rng() * TAU;
       if (used[g].some(([s, l]) => circOverlap(start, sweep, s, l, 6 * DEG))) continue;
       used[g].push([start, sweep]);
-      const padR = Math.min(gap * 0.28, 2.2);
+      const padR = Math.min(gap * 0.28, (2.2 * p.outerDiameter) / REF_DIAMETER);
       const pads = [];
       for (const th of [start, start + sweep]) {
         if (rng() < p.tracePads) {

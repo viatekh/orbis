@@ -169,7 +169,8 @@ export function buildMesh(design, fab) {
 }
 
 export function toSTL(design, fab, body = null) {
-  const tris = body ? buildBodies(design, fab)[body] : buildMesh(design, fab);
+  // Fused prints need no pins: pegs inside pin holes would only leave ring-shaped voids.
+  const tris = body ? buildBodies(design, fab)[body] : buildMesh(design, { ...fab, pins: false });
   const buf = new ArrayBuffer(84 + tris.length * 50);
   const dv = new DataView(buf);
   const header = 'Orbis circular circuit relief (mm)';

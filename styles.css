@@ -256,7 +256,7 @@ input[type='range']:hover::-webkit-slider-thumb { border-color: var(--accent); }
 /* ---------------------------------------------------------------- make column */
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .f { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); font-family: var(--display); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; min-width: 0; }
-.f.wide { grid-column: 1 / -1; }
+.f.wide, .fields > button.wide { grid-column: 1 / -1; }
 .f select { font-family: var(--body); text-transform: none; letter-spacing: 0; color: var(--ink); font-size: 14px; }
 .f b { display: flex; align-items: center; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); font-weight: 400; }
 .f b:focus-within { border-color: var(--accent); }
@@ -272,6 +272,8 @@ input[type='range']:hover::-webkit-slider-thumb { border-color: var(--accent); }
 .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.4; }
 .steps li::marker { font-family: var(--mono); color: var(--accent); font-weight: 600; }
 .seg.small button { min-width: 0; }
+#layoutSeg button { flex: 1 1 auto; padding: 5px 4px; letter-spacing: 0.05em; font-size: 11.5px; white-space: nowrap; }
+#viewSeg button { flex: none; }
 .dfm { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .dfm li { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: baseline; font-size: 13px; line-height: 1.35; }
 .dfm .tag { font-family: var(--mono); font-size: 10px; font-weight: 600; text-transform: uppercase; text-align: center; border-radius: 3px; padding: 1px 0; border: 1px solid currentColor; }
@@ -288,11 +290,14 @@ input[type='range']:hover::-webkit-slider-thumb { border-color: var(--accent); }
 .legend { font-family: var(--mono); font-size: 10px; letter-spacing: 0; text-transform: none; display: flex; gap: 6px; align-items: center; }
 .legend i { width: 10px; height: 2px; display: inline-block; }
 .lg-cut { background: #ff3b30; }
+.lg-inner { background: #d63bd6; }
 .lg-eng { background: #3d7bff; }
 .lg-guide { background: #1fa45c; }
 .job-preview { background: #fbfcfb; border: 1px solid var(--line); border-radius: var(--r); aspect-ratio: 4 / 3; max-width: 100%; display: grid; place-items: center; padding: 8px; overflow: hidden; }
 .job-preview svg { width: 100%; height: 100%; }
 .job-preview #cut { stroke: #ff3b30; }
+.job-preview #inner { stroke: #d63bd6; }
+.job-preview #labels { stroke: #3a4046; }
 .job-preview #engrave { stroke: #3d7bff; }
 .job-preview #guides { stroke: #1fa45c; }
 .note { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.4; }

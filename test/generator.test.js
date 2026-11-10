@@ -81,6 +81,17 @@ test('exports are structurally valid', () => {
   assert.equal((dxf.match(/\nARC\n/g) || []).length, d.hairlines.length);
   const cut = fabSVG(d, defaultFab('laser'));
   assert.match(cut, /width="[\d.]+mm"/);
-  assert.match(cut, /inkscape:label="CUT"/);
+  assert.match(cut, /inkscape:label="3-CUT-INNER"[\s\S]*inkscape:label="4-CUT-OUTLINE"/);
   assert.doesNotMatch(designSVG(d), /NaN/);
+});
+
+test('scaling a design keeps its structure', async () => {
+  const { scaleParams } = await import('../src/generator.js');
+  const base = generate({ seed: 12 });
+  const half = generate(scaleParams(base.params, 0.5));
+  assert.equal(half.params.outerDiameter, 240);
+  assert.equal(half.parts.length, base.parts.length);
+  assert.equal(half.hairlines.length, base.hairlines.length);
+  const ratio = half.stats.cutLengthMm / base.stats.cutLengthMm;
+  assert.ok(ratio > 0.4 && ratio < 0.62, `cut length ratio ${ratio}`);
 });
