@@ -305,3 +305,24 @@ test('ribbons: curved parts keep their cutouts inside, apart, and on a sheet', a
     }
   }
 });
+
+test('fixing holes sit in solid material, clear of edges and cutouts', () => {
+  const stage = generateStage({ ...STAGE_DEFAULTS, tendrils: 3, tendrilStyle: 'flame', motif: 'honeycomb' }, DEFAULTS, { fixing: 8.5 });
+  assert.ok(stage.stats.fixings > 200);
+  assert.equal(generateStage(STAGE_DEFAULTS, DEFAULTS).stats.fixings, 0);
+  const seg = (x, y, a, b) => {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t);
+  };
+  const toPoly = (x, y, Q) => Math.min(...Q.map((a, i) => seg(x, y, a, Q[(i + 1) % Q.length])));
+  for (const p of stage.parts) {
+    for (const h of p.holes.filter((q) => q.kind === 'fix')) {
+      assert.ok(toPoly(h.x, h.y, p.points) - h.r > 8, `fixing too near the edge of ${p.id}`);
+      for (const cut of p.cuts) assert.ok(toPoly(h.x, h.y, cut) - h.r > 5, `fixing too near a cutout in ${p.id}`);
+      for (const o of p.holes) if (o !== h) assert.ok(Math.hypot(o.x - h.x, o.y - h.y) - o.r - h.r > 5, `fixing too near a hole in ${p.id}`);
+    }
+  }
+  assert.ok(settingOutCSV(stage).split('\n')[0].endsWith('fixing_holes'));
+});

@@ -46,7 +46,7 @@ const circle = (h, n = 14) => Array.from({ length: n }, (_, i) => [h.x + h.r * M
 const LIGHT = [-0.35, -0.55, 0.76];
 
 // Depth-sorted SVG for a set of panels (shared by the stage view and the source preview).
-export function panelsMarkup(parts, cam, { mode, palette, mat, backlit, draft = false }) {
+export function panelsMarkup(parts, cam, { mode, palette, mat, backlit, draft = false, animate = false }) {
   const ns = 'vector-effect="non-scaling-stroke"';
   const items = parts.map((pt) => {
     const place = (q) => cam.point(world(pt, q));
@@ -73,7 +73,7 @@ export function panelsMarkup(parts, cam, { mode, palette, mat, backlit, draft = 
     const k = lit * (1 + 0.07 * (pt.layer || 0)) * fog;
     const color = paletteColor(palette, pt.t);
     if (mode === 'night') {
-      if (backlit && !draft) out += `<path d="${glow}" fill="${color}" fill-opacity="${(0.55 * fog * fog).toFixed(2)}"/>`;
+      if (backlit && !draft) out += `<path d="${glow}" fill="${color}" fill-opacity="${(0.55 * fog * fog).toFixed(2)}"${animate ? ` class="pulse" style="animation-delay:-${(pt.t * 3.2).toFixed(2)}s"` : ''}/>`;
       out += `<path d="${d}" fill-rule="evenodd" fill="${shade('#141a21', k)}" stroke="${color}" stroke-opacity="${fog.toFixed(2)}" stroke-width="1" ${ns}/>`;
     } else if (mode === 'day') {
       if (backlit && !draft) out += `<path d="${glow}" fill="#f6f2e6"/>`;
@@ -111,7 +111,7 @@ function trussLines(x, y, w, h) {
   return lines;
 }
 
-export function elevationSVG(stage, { mode = 'night', palette = 'neon', material = null, yaw = 0, pitch = 0, draft = false, view = null } = {}) {
+export function elevationSVG(stage, { mode = 'night', palette = 'neon', material = null, yaw = 0, pitch = 0, draft = false, view = null, animate = false } = {}) {
   if (mode === 'setout') yaw = pitch = 0;
   const th = THEMES[mode] || THEMES.night;
   const mat = material || { fill: '#dcc196', edge: '#6b4a26' };
@@ -126,6 +126,7 @@ export function elevationSVG(stage, { mode = 'night', palette = 'neon', material
   const shown = view || vb;
   let out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${f0(shown.x)} ${f0(shown.y)} ${f0(shown.w)} ${f0(shown.h)}" preserveAspectRatio="xMidYMax meet">`;
   out += `<defs><filter id="glow" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="26" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+  if (animate) out = out.replace('<defs>', '<style>@keyframes pulse{0%,100%{fill-opacity:.08}45%{fill-opacity:.95}}.pulse{animation:pulse 3.2s ease-in-out infinite}</style><defs>');
   out += `<radialGradient id="haze" cx="50%" cy="55%" r="60%"><stop offset="0" stop-color="${paletteColor(palette, 0.5)}" stop-opacity="0.16"/><stop offset="1" stop-color="${paletteColor(palette, 0.5)}" stop-opacity="0"/></radialGradient></defs>`;
   out += `<rect x="${f0(vb.x)}" y="${f0(vb.y)}" width="${f0(vb.w)}" height="${f0(vb.h)}" fill="${th.sky}"/>`;
   if (mode === 'night') out += `<rect x="${f0(vb.x)}" y="${f0(vb.y)}" width="${f0(vb.w)}" height="${f0(vb.h)}" fill="url(#haze)"/>`;
@@ -173,10 +174,10 @@ export function elevationSVG(stage, { mode = 'night', palette = 'neon', material
     }
   }
 
-  const style = { mode, palette, mat, backlit: p.backlit, draft };
+  const style = { mode, palette, mat, backlit: p.backlit, draft, animate: animate && mode === 'night' && !draft };
   const behind = stage.parts.filter((pt) => pt.el !== 'booth');
   const booth = stage.parts.filter((pt) => pt.el === 'booth');
-  const glow = mode === 'night' && !draft ? ' filter="url(#glow)"' : '';
+  const glow = mode === 'night' && !draft && !animate ? ' filter="url(#glow)"' : ''; // the blur is too costly to redo every frame
   // from above the deck top sits in front of nothing; from the front it is edge-on
   out += deckTop;
   out += `<g${glow}>${traces}${panelsMarkup(behind, cam, style)}</g>`;

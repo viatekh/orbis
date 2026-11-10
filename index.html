@@ -182,6 +182,7 @@
         <label class="check"><input type="checkbox" id="st-mirror" /> Mirror</label>
         <label class="check"><input type="checkbox" id="st-backlit" /> Backlit</label>
         <label class="check"><input type="checkbox" id="st-truss" /> Truss</label>
+        <label class="check"><input type="checkbox" id="st-spikeCrown" /> Spikes on crown</label>
         <label class="check" title="Changing Stage Width resizes everything in proportion. Sheet, bit and thickness stay fixed."><input type="checkbox" id="st-linked" /> Scale together</label>
         <label class="check" title="Show an eye on every control so you can hide the ones you never use"><input type="checkbox" id="st-customize" /> Hide controls</label>
       </div>
@@ -196,6 +197,7 @@
           <div class="seg small" id="stageModeSeg" role="group" aria-label="View"></div>
           <select id="st-palette" aria-label="LED colour"></select>
           <div class="seg small" id="stageViewSeg" role="group" aria-label="Camera"><button data-cam="front">Front</button><button data-cam="orbit">3D</button></div>
+          <button id="btnLights" class="hud-btn" title="Play a light chase">Lights</button>
           <div class="seg small" id="stageZoomSeg" role="group" aria-label="Zoom"><button data-zoom="out" aria-label="Zoom out">−</button><button data-zoom="fit" title="Reset zoom">Fit</button><button data-zoom="in" aria-label="Zoom in">+</button></div>
         </div>
       </div>
@@ -212,6 +214,7 @@
         <label class="f"><span>Sheet width</span><b><input id="st-sheetH" type="number" min="300" max="2500" step="10" /><em>mm</em></b></label>
         <label class="f"><span>Thickness</span><b><input id="st-thickness" type="number" min="3" max="30" step="1" /><em>mm</em></b></label>
         <label class="f"><span>Bit Ø</span><b><input id="st-tool" type="number" min="1" max="20" step="0.5" /><em>mm</em></b></label>
+        <label class="f"><span>Fixing holes Ø</span><b><input id="st-fixing" type="number" min="0" max="16" step="0.5" title="0 = none. 8.5 suits an M8 bolt." /><em>mm</em></b></label>
       </div>
       <div class="checks-row">
         <label class="check"><input type="checkbox" id="st-labels" /> Panel numbers</label>
@@ -251,5 +254,14 @@
 </div>
 <div class="toast" id="toast" role="status"></div>
 <script type="module" src="src/app.js"></script>
+<dialog id="rollDialog" class="roll-dialog" aria-label="Pick a stage">
+  <div class="roll-head">
+    <h2>Pick a stage</h2>
+    <select id="rollFamily" aria-label="Family"></select>
+    <button id="btnRollAgain">Roll again</button>
+    <button id="btnRollClose" class="ghost">Close</button>
+  </div>
+  <div class="roll-grid" id="rollGrid"></div>
+</dialog>
 </body>
 </html>

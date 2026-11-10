@@ -120,7 +120,7 @@ const CHOICES = {
 };
 // Each piece can follow the lattice cell or carry its own module and fretwork.
 const own = (p, piece, kind) => (p[`${piece}${kind}`] && p[`${piece}${kind}`] !== 'inherit' ? p[`${piece}${kind}`] : p[kind.toLowerCase()]);
-const FLAGS = ['mirror', 'truss', 'backlit'];
+const FLAGS = ['mirror', 'truss', 'backlit', 'spikeCrown'];
 
 export const STAGE_DEFAULTS = {
   ...Object.fromEntries(STAGE_PARAMS.map((p) => [p.key, p.def])),
@@ -143,6 +143,7 @@ export const STAGE_DEFAULTS = {
   spikeMotif: 'inherit',
   petalMotif: 'inherit',
   mirror: true,
+  spikeCrown: false, // spikes ride the crown edge instead of a fixed radius
   truss: true,
   backlit: true,
 };
@@ -162,7 +163,7 @@ export function normalizeStage(input = {}) {
   return out;
 }
 
-const FAB_LIMITS = { sheetW: [600, 4000], sheetH: [300, 2500], thickness: [3, 30], tool: [1, 20], printBed: [100, 2000], printThickness: [1, 30] };
+const FAB_LIMITS = { sheetW: [600, 4000], sheetH: [300, 2500], thickness: [3, 30], tool: [1, 20], printBed: [100, 2000], printThickness: [1, 30], fixing: [0, 16] };
 // Resize the whole design: sizes scale together, fabrication constants (sheet, bit, thickness) do not.
 const SCALED = ['width', 'discDiameter', 'lift', 'coreGap', 'discZ', 'discStep', 'sideDisc', 'sideOffset', 'bandStep', 'petalLength', 'petalWidth', 'spikeStart', 'spikeLength', 'spikeWidth', 'tendrilLength', 'tendrilWidth', 'crownHeight', 'joint', 'formDepth', 'depth', 'rim', 'layerGap'];
 export function scaleStage(params, k) {
@@ -171,7 +172,7 @@ export function scaleStage(params, k) {
   return normalizeStage(out);
 }
 
-export const STAGE_FAB_DEFAULTS = { sheetW: 2440, sheetH: 1220, thickness: 12, tool: 6, material: 'birch', labels: true, led: true, printBed: 245, printThickness: 4, printSet: 'none' };
+export const STAGE_FAB_DEFAULTS = { sheetW: 2440, sheetH: 1220, thickness: 12, tool: 6, material: 'birch', labels: true, led: true, printBed: 245, printThickness: 4, printSet: 'none', fixing: 0 };
 
 export function normalizeStageFab(input = {}) {
   const out = { ...STAGE_FAB_DEFAULTS };
@@ -580,6 +581,29 @@ function etchDetail(P, fret, rim) {
   return out;
 }
 
+// Fixing holes for bolting a panel to the structure behind: in the solid rim, at the corners
+// (every other corner once there are more than four), clear of the edge and of every cutout.
+function withFixings(P, fret, rim, r) {
+  if (!r) return fret;
+  const e = rim / 2;
+  if (e < r + 9 || rim - e < r + 6) return fret;
+  const edges = edgesOf(P);
+  const holes = [];
+  const stepBy = P.length > 4 ? 2 : 1;
+  for (let i = 0; i < P.length; i += stepBy) {
+    const a = edges[(i + P.length - 1) % P.length];
+    const b = edges[i];
+    // the point that is `e` inside both edges meeting at this corner
+    const det = a.nx * b.ny - a.ny * b.nx;
+    if (Math.abs(det) < 0.2) continue;
+    const [ca, cb] = [a.c + e, b.c + e];
+    const x = (ca * b.ny - cb * a.ny) / det;
+    const y = (a.nx * cb - b.nx * ca) / det;
+    if (insideBy(P, x, y) > e - 0.5) holes.push({ x, y, r, kind: 'fix' });
+  }
+  return holes.length >= 2 ? { cuts: fret.cuts, holes: [...fret.holes, ...holes] } : fret;
+}
+
 function panel(P, fret, extra) {
   return { points: P, holes: fret.holes, cuts: fret.cuts, ...etchDetail(P, fret, extra.rim), label: labelSpot(P, fret.cuts, fret.holes, extra.rim), ...extra };
 }
@@ -596,7 +620,7 @@ function modulePanels(P, m) {
   const inr = inradius(P);
   const cP = centroid(P);
   const base = { t: m.t, el: m.el, minWidth: Math.min(web, inr * 2) };
-  const flat = (poly, fret, z, layer, rim = Math.min(m.opts.rim, inradius(poly) * 0.42)) => ({ ...panel(poly, fret, { ...base, rim, layer }), frame: lift.frame(cP, m.z0 + z) });
+  const flat = (poly, fret, z, layer, rim = Math.min(m.opts.rim, inradius(poly) * 0.42)) => ({ ...panel(poly, layer === 0 ? withFixings(poly, fret, rim, m.opts.fixR) : fret, { ...base, rim, layer }), frame: lift.frame(cP, m.z0 + z) });
 
   // folded: every edge becomes a triangular face rising to an apex. On a curved form the
   // base corners follow the surface, so this is also how a form is turned into flat facets.
@@ -712,16 +736,7 @@ function buildFacade(p, ctx, holes) {
   const N = p.cells;
   const dv = TAU / N;
   const rBase = ctx.rBase;
-  const rTop = Math.max(deckH + p.crownHeight * M - cy, rBase + 900);
-  const rSide = W / 2;
-  const e = p.squareness;
-  const silhouette = (th) => {
-    const base = (Math.abs(Math.cos(th) / rTop) ** e + Math.abs(Math.sin(th) / rSide) ** e) ** (-1 / e);
-    if (!p.crownPoints) return base;
-    const phase = (th / Math.PI) * p.crownPoints;
-    const peak = Math.abs((((phase % 1) + 1) % 1) - 0.5) * 2; // 1 at each crown point
-    return base * (1 - p.crownDepth * (1 - peak));
-  };
+  const { rTop, rSide, silhouette } = ctx;
   const rMax = Math.max(rTop, rSide) * 1.05;
   const grid = p.layout === 'grid';
   const gridS = Math.min(Math.max(W / N, 420), S / 1.2);
@@ -1099,11 +1114,11 @@ function buildSpikes(p, ctx) {
   const { cy, deckH } = ctx;
   const len = Math.min(p.spikeLength * M, ctx.L);
   const w = Math.min(p.spikeWidth * M, ctx.S);
-  const r0 = p.spikeStart * M;
   const parts = [];
   for (let i = 0; i < n; i++) {
     const th = ((i + 0.5) * TAU) / n;
     if (p.mirror && th > Math.PI) continue;
+    const r0 = p.spikeCrown ? ctx.silhouette(th) * 0.94 : p.spikeStart * M;
     const dir = [Math.sin(th), -Math.cos(th)];
     const nrm = [dir[1], -dir[0]];
     const at = (d, k) => [dir[0] * (r0 + d) + nrm[0] * k, -cy + dir[1] * (r0 + d) + nrm[1] * k];
@@ -1132,7 +1147,7 @@ function buildSpikes(p, ctx) {
 // Organic elements are ribbons (see ribbon.js): one curved outline per sheet-sized piece.
 const ribbonOpts = (p, ctx, motif) => ({
   L: ctx.L, S: ctx.S, web: ctx.web, rim: p.rim, minSlot: ctx.fret.minSlot, minHoleR: ctx.fret.minHoleR,
-  motif: motif || (p.motif === 'solid' ? 'solid' : p.ribbonMotif), detail: p.detail, etch: p.etch, clipY: -(ctx.deckH + 30),
+  motif: motif || (p.motif === 'solid' ? 'solid' : p.ribbonMotif), detail: p.detail, etch: p.etch, clipY: -(ctx.deckH + 30), fixR: ctx.fret.fixR,
 });
 // Turn ribbon pieces into placed stage parts.
 function placeRibbon(pieces, ctx, { z, el, t, layer = 0, raised = false }) {
@@ -1212,7 +1227,7 @@ function context(p, fab) {
   const D = p.discDiameter * M;
   const deckH = p.deckHeight * M;
   const web = Math.max(30, fab.tool * 3, fab.thickness * 2.5);
-  const fret = { web, rim: p.rim, detail: p.detail, minSlot: Math.max(22, fab.tool * 2.5), minHoleR: Math.max(14, fab.tool) };
+  const fret = { web, rim: p.rim, detail: p.detail, minSlot: Math.max(22, fab.tool * 2.5), minHoleR: Math.max(14, fab.tool), fixR: fab.fixing / 2 };
   const hasCore = SOLID_CORES.includes(p.centre);
   // where the surrounding elements start: core edge (or the void), plus the gap
   const rInner = p.centre === 'none' ? 260 : D / 2 + (hasCore ? 60 : 0) + p.coreGap;
@@ -1225,6 +1240,19 @@ function context(p, fab) {
     latticeOn: p.tiling !== 'none' && !p.hidden.includes('facade'),
     zOf: (el) => p.layerOrder.indexOf(el) * p.layerGap,
     show: (el) => !p.hidden.includes(el),
+  };
+  // the crown silhouette: how far the facade reaches in each direction from the centre
+  const rTop = Math.max(deckH + p.crownHeight * M - ctx.cy, ctx.rBase + 900);
+  const rSide = ctx.W / 2;
+  const e = p.squareness;
+  ctx.rTop = rTop;
+  ctx.rSide = rSide;
+  ctx.silhouette = (th) => {
+    const base = (Math.abs(Math.cos(th) / rTop) ** e + Math.abs(Math.sin(th) / rSide) ** e) ** (-1 / e);
+    if (!p.crownPoints) return base;
+    const phase = (th / Math.PI) * p.crownPoints;
+    const peak = Math.abs((((phase % 1) + 1) % 1) - 0.5) * 2; // 1 at each crown point
+    return base * (1 - p.crownDepth * (1 - peak));
   };
   ctx.lift = makeLift(p, ctx);
   return ctx;
@@ -1390,7 +1418,8 @@ export function generateStage(input, discParams = DEFAULTS, fabInput = {}) {
       ledM: fab.led ? (edges + traceLen) / M : 0,
       deckModules: Math.ceil(W / 2000) * Math.ceil((p.deckDepth * M) / 1000),
       trussM: truss ? (2 * truss.h + truss.w) / M : 0,
-      cutouts: parts.reduce((s, pt) => s + pt.holes.length + pt.cuts.length, 0),
+      cutouts: parts.reduce((s, pt) => s + pt.holes.filter((h) => h.kind !== 'fix').length + pt.cuts.length, 0),
+      fixings: parts.reduce((s, pt) => s + pt.holes.filter((h) => h.kind === 'fix').length, 0),
     },
   };
 }

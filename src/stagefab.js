@@ -66,6 +66,7 @@ export function checkStage(stage, job) {
     if (stats.printed) add('ok', `${stats.printed} parts print on a ${fab.printBed} mm bed, ${fab.printThickness} mm thick.`);
     if (stats.printSkipped) add(stats.printed ? 'info' : 'warn', `${stats.printSkipped} chosen parts are larger than the ${fab.printBed} mm bed and stay on the CNC sheets.`);
   }
+  if (fab.fixing) add(stats.fixings ? 'ok' : 'warn', stats.fixings ? `${stats.fixings} fixing holes of ${fab.fixing} mm in the back-plane panels and curved parts — one bolt and stand-off each.` : `No room for ${fab.fixing} mm fixing holes: widen the Rim.`);
   const holes = stage.parts.flatMap((pt) => pt.holes);
   const small = holes.filter((h) => h.r * 2 < fab.tool * 1.1).length;
   if (small) add('fail', `${small} round cutouts are smaller than the ${fab.tool} mm bit — use a smaller bit or a larger disc.`);
@@ -86,14 +87,14 @@ export function checkStage(stage, job) {
 
 // One row per panel: where it sits relative to the stage centreline, the ground and the back plane.
 export function settingOutCSV(stage) {
-  const rows = ['panel,element,centre_x_mm,centre_height_mm,standoff_mm,width_mm,height_mm,tilted,cutouts'];
+  const rows = ['panel,element,centre_x_mm,centre_height_mm,standoff_mm,width_mm,height_mm,tilted,cutouts,fixing_holes'];
   for (const pt of stage.parts) {
     const w = pt.points.map((q) => world(pt, q));
     const span = (i) => [Math.min(...w.map((q) => q[i])), Math.max(...w.map((q) => q[i]))];
     const [x0, x1] = span(0);
     const [y0, y1] = span(1);
     const [z0, z1] = span(2);
-    rows.push([pt.id, pt.el, Math.round((x0 + x1) / 2), Math.round(-(y0 + y1) / 2), Math.round((z0 + z1) / 2), Math.round(x1 - x0), Math.round(y1 - y0), pt.tilted ? 'yes' : 'no', pt.holes.length + pt.cuts.length].join(','));
+    rows.push([pt.id, pt.el, Math.round((x0 + x1) / 2), Math.round(-(y0 + y1) / 2), Math.round((z0 + z1) / 2), Math.round(x1 - x0), Math.round(y1 - y0), pt.tilted ? 'yes' : 'no', pt.holes.filter((h) => h.kind !== 'fix').length + pt.cuts.length, pt.holes.filter((h) => h.kind === 'fix').length].join(','));
   }
   return rows.join('\n') + '\n';
 }

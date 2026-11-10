@@ -11,7 +11,7 @@ import {
 } from './stage.js';
 import { stageJob, checkStage, settingOutCSV, printFiles } from './stagefab.js';
 import { STAGE_PRESETS } from './stagepresets.js';
-import { randomStage } from './stagerandom.js';
+import { randomStage, RECIPE_NAMES } from './stagerandom.js';
 import { elevationSVG, elevationBox, skyColor, sourceSVG, STAGE_MODES } from './stagerender.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -96,7 +96,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     host.appendChild(det);
   }
   const SELECTS = { tiling: TILINGS, layout: LAYOUTS, form: FORMS, etchPattern: ETCH_PATTERNS, tendrilStyle: TENDRIL_STYLES };
-  const CHECKS = ['mirror', 'backlit', 'truss'];
+  const CHECKS = ['mirror', 'backlit', 'truss', 'spikeCrown'];
   for (const [key, set] of Object.entries(SELECTS)) {
     $(`#st-${key}`).innerHTML = Object.entries(set).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
     $(`#st-${key}`).addEventListener('change', (e) => setParam(key, e.target.value));
@@ -119,7 +119,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     }
     for (const key of Object.keys(SELECTS)) $(`#st-${key}`).value = state.params[key];
     for (const key of CHECKS) $(`#st-${key}`).checked = state.params[key];
-    for (const key of ['sheetW', 'sheetH', 'thickness', 'tool', 'printBed', 'printThickness']) {
+    for (const key of ['sheetW', 'sheetH', 'thickness', 'tool', 'printBed', 'printThickness', 'fixing']) {
       const el = $(`#st-${key}`);
       if (document.activeElement !== el) el.value = state.fab[key];
     }
@@ -148,7 +148,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     render();
   }
 
-  for (const key of ['sheetW', 'sheetH', 'thickness', 'tool', 'printBed', 'printThickness']) $(`#st-${key}`).addEventListener('change', (e) => setFab(key, e.target.value));
+  for (const key of ['sheetW', 'sheetH', 'thickness', 'tool', 'printBed', 'printThickness', 'fixing']) $(`#st-${key}`).addEventListener('change', (e) => setFab(key, e.target.value));
   $('#st-material').addEventListener('change', (e) => setFab('material', e.target.value));
   $('#st-printSet').innerHTML = Object.entries(PRINT_SETS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
   $('#st-printSet').addEventListener('change', (e) => setFab('printSet', e.target.value));
@@ -225,14 +225,39 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     });
   }
 
-  // Randomise rolls a whole family of stage (see stagerandom.js), not every slider independently.
+  // Randomise offers a sheet of stages to pick from. Each roll is a whole family of stage
+  // (see stagerandom.js), not every slider rolled independently.
+  let rollRun = 0;
+  function rollGallery() {
+    const run = ++rollRun;
+    const grid = $('#rollGrid');
+    const only = $('#rollFamily').value || null;
+    grid.innerHTML = '';
+    const next = (i) => {
+      if (run !== rollRun || i >= 8 || !$('#rollDialog').open) return;
+      const roll = randomStage(STAGE_DEFAULTS, only);
+      const params = normalizeStage(roll);
+      const b = document.createElement('button');
+      b.innerHTML = `${elevationSVG(generateStage(params, getDisc(), state.fab), { mode: 'night', palette: roll.palette, material: MATERIALS[state.fab.material], draft: true })}<span>${roll.recipe}</span>`;
+      b.addEventListener('click', () => {
+        state.params = params;
+        state.palette = roll.palette;
+        $('#rollDialog').close();
+        render();
+        renderVariations();
+      });
+      grid.appendChild(b);
+      setTimeout(() => next(i + 1), 20);
+    };
+    setTimeout(() => next(0), 30);
+  }
+  $('#rollFamily').innerHTML = '<option value="">Any family</option>' + RECIPE_NAMES.map((k) => `<option>${k}</option>`).join('');
+  $('#rollFamily').addEventListener('change', rollGallery);
+  $('#btnRollAgain').addEventListener('click', rollGallery);
+  $('#btnRollClose').addEventListener('click', () => $('#rollDialog').close());
   $('#btnStageRandom').addEventListener('click', () => {
-    const roll = randomStage(STAGE_DEFAULTS);
-    state.params = normalizeStage(roll);
-    state.palette = roll.palette;
-    render();
-    renderVariations();
-    toast(`${roll.recipe} — roll again for another family`);
+    $('#rollDialog').showModal();
+    rollGallery();
   });
   $('#btnStageSeed').addEventListener('click', () => setParam('seed', Math.floor(Math.random() * 1000)));
   $('#btnStageReset').addEventListener('click', () => {
@@ -244,7 +269,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
   // ------------------------------------------------------------ render
   const fileBase = () => `orbis-stage-s${state.params.seed}-${state.params.width}m-${state.params.tiling}`;
   const look = () => ({ palette: state.palette, material: MATERIALS[state.fab.material] });
-  const elevation = (mode = state.mode, cam = state.cam, draft = false, view = null) => elevationSVG(state.stage, { mode, ...look(), ...cam, draft, view });
+  const elevation = (mode = state.mode, cam = state.cam, draft = false, view = null) => elevationSVG(state.stage, { mode, ...look(), ...cam, draft, view, animate: state.animate });
   const FRONT = { yaw: 0, pitch: 0 };
   let makeTimer;
 
@@ -290,6 +315,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
       ['Deck', `${s.deckModules} × 2×1 m`],
       ['Facade', `${s.areaM2.toFixed(1)} m²`],
       ['Relief', `${Math.round(s.reliefMm)} mm`],
+      ...(s.fixings ? [['Fixings', `${s.fixings} × M${Math.max(3, Math.floor(stage.fab.fixing - 0.4))}`]] : []),
       ...(s.printed ? [['3D printed', `${s.printed} parts`], ['Filament', `≈ ${s.printKg.toFixed(1)} kg · ${Math.round(s.printHours)} h`]] : []),
     ];
     $('#stageEstimate').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
@@ -425,6 +451,12 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     e.preventDefault();
     zoomBy(Math.exp(-e.deltaY * 0.0016), e.clientX, e.clientY);
   }, { passive: false });
+  // Lights: a chase that pulses outward from the centre, to judge how the piece reads lit
+  $('#btnLights').addEventListener('click', () => {
+    state.animate = !state.animate;
+    $('#btnLights').classList.toggle('on', state.animate);
+    render();
+  });
   $('#stageZoomSeg').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -448,6 +480,12 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     (p) => { const v = pickKey(MOTIFS, [p.motif]); return [{ motif: v }, MOTIFS[v]]; },
     (p) => [{ depth: -p.depth || -250 }, p.depth > 0 ? 'Recessed' : 'Raised'],
     (p) => [{ petals: p.petals ? 0 : 14, spikes: p.spikes ? 0 : 12 }, 'Swap petals / spikes'],
+    (p) => [{ petals: p.petals || 14, petalCurl: p.petalCurl ? 0 : 0.55 }, p.petalCurl ? 'Straight petals' : 'Curled petals'],
+    (p) => { const v = pickKey(TENDRIL_STYLES, [p.tendrils ? p.tendrilStyle : '']); return [{ tendrils: p.tendrils || 4, tendrilStyle: v }, `${TENDRIL_STYLES[v]}s`]; },
+    (p) => [{ spikes: p.spikes || 12, spikeCurl: p.spikeCurl ? 0 : 0.65, spikeCrown: true }, 'Flames on the crown'],
+    (p) => { const v = pickKey(RIBBON_MOTIFS, [p.ribbonMotif]); return [{ ribbonMotif: v, tendrils: p.tendrils || 3 }, `Curves: ${RIBBON_MOTIFS[v]}`]; },
+    (p) => [{ layout: p.layout === 'grid' ? 'radial' : 'grid' }, p.layout === 'grid' ? 'Radial lattice' : 'Grid lattice'],
+    (p) => [{ form: 'funnel', formDepth: p.formDepth < -4 ? 3 : -6 }, p.formDepth < -4 ? 'Dome out' : 'Deep vortex'],
     (p) => [{ cells: 14 + 2 * Math.floor(Math.random() * 12), crownPoints: Math.floor(Math.random() * 8) }, 'Lattice scale'],
   ];
   let varRun = 0;

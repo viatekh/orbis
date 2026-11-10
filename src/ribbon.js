@@ -229,7 +229,16 @@ export function ribbonParts(spine, half, o) {
       if (motif === 'vein' || motif === 'solid') run(() => 0);
     }
 
-    out.push({ points, cuts, holes, etch: [], etchLines, label: P(sa + endM * 0.5, 0), minWidth: narrow, rim, u: spine[Math.round((a + b) / 2)].u });
+    // fixing holes in the solid zone at each end of the piece
+    if (o.fixR) {
+      for (const s of [sa + endM * 0.68, sb - endM * 0.68]) {
+        if (Math.min(W(wl, s), W(wr, s)) >= o.fixR + 12) {
+          const c = P(s, 0);
+          holes.push({ x: c[0], y: c[1], r: o.fixR, kind: 'fix' });
+        }
+      }
+    }
+    out.push({ points, cuts, holes, etch: [], etchLines, label: P(sa + endM * 0.28, 0), minWidth: narrow, rim, u: spine[Math.round((a + b) / 2)].u });
   });
   return out;
 }
