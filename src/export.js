@@ -61,8 +61,9 @@ export function artSVG(design, opts) {
 
 // DXF R12 — widest compatibility (LightBurn, Fusion, VCarve, Illustrator, LibreCAD).
 // DXF is Y-up, so Y is negated and arc angles mirrored.
-export function toDXF(design, fab) {
-  const job = buildJob(design, fab);
+export const toDXF = (design, fab) => jobDXF(buildJob(design, fab));
+
+export function jobDXF(job) {
   const L = [];
   const g = (code, value) => L.push(String(code), String(value));
   const deg = (a) => f3(((((a * 180) / Math.PI) % 360) + 360) % 360);

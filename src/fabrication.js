@@ -227,7 +227,7 @@ export function buildJob(rawDesign, fab) {
   };
   // a kerf wider than the hole still leaves a hole: keep a pierce point
   const hole = (c) => ({ x: c.x, y: c.y, r: Math.max(0.05, c.r - k) });
-  const labelSize = Math.max(2.5, Math.min(5, minPartWidth(design) * 0.45));
+  const labelSize = design.labelSize ?? Math.max(2.5, Math.min(5, minPartWidth(design) * 0.45));
 
   const addTraces = () => {
     if (!fab.engrave) return;
@@ -378,6 +378,12 @@ function packSheets(design, fab, k, job, labelSize) {
       const a = (deg * Math.PI) / 180;
       const b = bbox(poly.map((pt) => rot(pt, Math.cos(a), Math.sin(a))));
       if (!best || b.w * b.h < best.b.w * best.b.h) best = { a, b };
+    }
+    // refine around the coarse winner: long straight parts need to sit dead square to fit
+    for (let d = -1.5; d <= 1.5; d += 0.125) {
+      const a = best.a + (d * Math.PI) / 180;
+      const b = bbox(poly.map((pt) => rot(pt, Math.cos(a), Math.sin(a))));
+      if (b.w * b.h < best.b.w * best.b.h - 1e-9) best = { a, b };
     }
     let a = best.a + (best.b.h > best.b.w ? Math.PI / 2 : 0); // long side along the bed
     let o = orient(poly, a, gap);

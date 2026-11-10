@@ -9,6 +9,19 @@ npm start        # → http://localhost:5173
 npm test         # geometry + export tests (node --test)
 ```
 
+## Stage mode
+
+The **Stage** workspace turns the disc into the centrepiece of a festival stage facade, drawn as a to-scale front elevation.
+
+- **Centrepiece**: your current Disc design, scaled to 1–8 m and re-sliced so every ring segment fits one sheet.
+- **Wings**: Fins, Rays or Arcs, mirrored or independent, with height, sweep, fill, tilt and cutout controls. Long blades are split into sheet-length panels automatically.
+- **DJ booth** front, stage deck (2×1 m modules) and an indicative goalpost truss, with 1.75 m figures for scale.
+- **Views**: Night (LED-lit), Day (material) and Setting-out (numbered panels on a 1 m grid).
+- **Make**: sheet size, thickness, bit and material; panels are nested onto sheets with a bill of materials (sheets, CNC time, weight, LED run, deck modules, facade area).
+- **Build kit .zip**: nested cut sheets (SVG + DXF, engraved panel numbers, cutouts before outlines), setting-out drawing and CSV of every panel position, visuals, settings and notes.
+
+The facade is a wind sail: structure, fixings and wind limits must be designed and signed off by a qualified engineer. The truss shown is indicative only.
+
 ## Features
 
 - **Live parametric controls**: 21 design parameters across Layout, Slices, Notches & Edges, Cutouts and Traces.

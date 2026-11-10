@@ -21,8 +21,17 @@
       </svg>
       <span class="wordmark">ORBIS</span>
       <span class="tagline">ring circuit workshop</span>
+      <div class="seg small" id="modeSeg" role="group" aria-label="Workspace">
+        <button data-ws="stage">Stage</button>
+        <button data-ws="disc">Disc</button>
+      </div>
     </div>
-    <div class="bar-actions">
+    <div class="bar-actions stage-only">
+      <button id="btnStageRandom" title="Randomize the stage">Randomize</button>
+      <button id="btnStageSeed" title="New seed">New seed</button>
+      <button id="btnStageReset" title="Back to the default stage">Reset</button>
+    </div>
+    <div class="bar-actions disc-only">
       <button id="btnRandom" title="Randomize unlocked parameters (R)">Randomize</button>
       <button id="btnMutate" title="Nudge unlocked parameters (M)">Mutate</button>
       <button id="btnSeed" title="New seed (N)">New seed</button>
@@ -33,7 +42,7 @@
     </div>
   </header>
 
-  <main class="work">
+  <main class="work disc-only">
     <aside class="col design-col" aria-label="Design">
       <div class="col-head">
         <h2>Design</h2>
@@ -144,7 +153,62 @@
     </aside>
   </main>
 
-  <footer class="keys">
+  <main class="work stage-only" id="stageWork">
+    <aside class="col design-col" aria-label="Stage design">
+      <div class="col-head"><h2>Stage</h2><span class="file" id="stageName"></span></div>
+      <div class="fields">
+        <label class="f wide"><span>Wing style</span><select id="st-wingStyle"></select></label>
+      </div>
+      <div class="checks-row">
+        <label class="check"><input type="checkbox" id="st-mirror" /> Mirror wings</label>
+        <label class="check"><input type="checkbox" id="st-truss" /> Show truss</label>
+      </div>
+      <button id="btnEditDisc" title="The centrepiece is your current Disc design">Edit centrepiece in Disc →</button>
+      <div id="stageControls"></div>
+    </aside>
+
+    <section class="stage-col">
+      <div class="viewport elevation">
+        <div id="elevation"></div>
+        <div class="hud hud-tl stage-hud">
+          <div class="seg small" id="stageModeSeg" role="group" aria-label="View"></div>
+          <select id="st-palette" aria-label="LED colour"></select>
+        </div>
+      </div>
+      <p class="note">Front elevation, to scale. Figures are 1.75 m. Every panel is sized to cut from one sheet; long blades and rings are split automatically.</p>
+    </section>
+
+    <aside class="col make-col" aria-label="Make stage" id="stageMake">
+      <div class="col-head"><h2>Make</h2><span class="file">CNC sheet goods</span></div>
+      <div class="fields">
+        <label class="f wide"><span>Material</span><select id="st-material"></select></label>
+        <label class="f"><span>Sheet length</span><b><input id="st-sheetW" type="number" min="600" max="4000" step="10" /><em>mm</em></b></label>
+        <label class="f"><span>Sheet width</span><b><input id="st-sheetH" type="number" min="300" max="2500" step="10" /><em>mm</em></b></label>
+        <label class="f"><span>Thickness</span><b><input id="st-thickness" type="number" min="3" max="30" step="1" /><em>mm</em></b></label>
+        <label class="f"><span>Bit Ø</span><b><input id="st-tool" type="number" min="1" max="20" step="0.5" /><em>mm</em></b></label>
+      </div>
+      <div class="checks-row">
+        <label class="check"><input type="checkbox" id="st-labels" /> Panel numbers</label>
+        <label class="check"><input type="checkbox" id="st-led" /> LED edges</label>
+      </div>
+      <div class="sub"><h3>Checks</h3><ul class="dfm" id="stageChecks"></ul></div>
+      <div class="sub"><h3>Bill of materials</h3><dl class="estimate" id="stageEstimate"></dl></div>
+      <div class="sub">
+        <h3>Cut sheets <span class="legend"><i class="lg-inner"></i>cut first <i class="lg-cut"></i>outline</span></h3>
+        <div class="job-preview" id="stagePreview"></div>
+      </div>
+      <div class="exports" id="stageExports">
+        <button class="primary" data-sexport="kit" title="Cut sheets (SVG + DXF), setting-out drawing and list, visuals, settings and build notes">Export build kit .zip</button>
+        <button data-sexport="sheets" title="Nested panels, 1:1 in mm">Sheets SVG</button>
+        <button data-sexport="dxf" title="Nested panels as DXF R12">DXF</button>
+        <button data-sexport="elevation" title="The elevation as shown">Elevation</button>
+        <button data-sexport="json" title="Stage settings">JSON</button>
+      </div>
+      <label class="import">Import stage JSON<input type="file" id="stageImport" accept="application/json,.json" /></label>
+    </aside>
+  </main>
+
+  <footer class="keys disc-only">
     <span><kbd>R</kbd> randomize</span><span><kbd>M</kbd> mutate</span><span><kbd>N</kbd> seed</span>
     <span><kbd>Space</kbd> spin</span><span><kbd>V</kbd> render</span><span><kbd>C</kbd> view</span>
     <span><kbd>X</kbd> shuffle</span><span><kbd>Ctrl Z</kbd> undo</span>

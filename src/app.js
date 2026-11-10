@@ -6,6 +6,7 @@ import { toSTL } from './mesh.js';
 import { zip } from './zip.js';
 import { makeVariations } from './variations.js';
 import { PRESETS } from './presets.js';
+import { initStage } from './stageapp.js';
 
 const $ = (sel) => document.querySelector(sel);
 const VIEWS = {
@@ -723,7 +724,7 @@ function bindUI() {
   });
 
   window.addEventListener('keydown', (e) => {
-    if (e.target.matches('input, select, textarea')) return;
+    if (e.target.matches('input, select, textarea') || document.body.dataset.mode === 'stage') return;
     const k = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'y')) {
       e.preventDefault();
@@ -765,3 +766,4 @@ fitStage();
 applyOrbit();
 commit();
 if (EMBED) getDownloads();
+initStage({ getDisc: () => state.params, setDisc: (p) => setParams(normalizeParams(p)), saveFile, saveZipped, toast });

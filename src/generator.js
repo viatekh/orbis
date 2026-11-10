@@ -88,7 +88,27 @@ function circOverlap(a0, l0, a1, l1, pad) {
   return d < l0 + pad || d > TAU - l1 - pad;
 }
 
-export function generate(input) {
+// Largest angular span of an arc band whose chord-aligned bounding box fits an L x S sheet.
+export function fitSpan(rIn, rOut, L, S) {
+  const fits = (th) => {
+    const c = Math.cos(th / 2);
+    const wd = th >= Math.PI ? 2 * rOut : 2 * rOut * Math.sin(th / 2);
+    const h = rOut - (c >= 0 ? rIn : rOut) * c;
+    return (wd <= L && h <= S) || (wd <= S && h <= L);
+  };
+  if (fits(TAU)) return TAU;
+  let lo = 0;
+  let hi = TAU;
+  for (let i = 0; i < 30; i++) {
+    const m = (lo + hi) / 2;
+    if (fits(m)) lo = m;
+    else hi = m;
+  }
+  return lo;
+}
+
+// opts.fit = { L, S }: slice rings so every part fits a sheet of that size.
+export function generate(input, opts = {}) {
   const p = normalizeParams(input);
   const R = p.outerDiameter / 2;
   const r0 = Math.min(p.innerRadius, R * 0.85);
@@ -115,13 +135,13 @@ export function generate(input) {
   }
 
   const parts = [];
-  for (const ring of rings) parts.push(...buildRing(p, ring));
+  for (const ring of rings) parts.push(...buildRing(p, ring, opts.fit));
   const hairlines = buildHairlines(p, rings);
 
   return { params: p, rings, parts, hairlines, stats: computeStats(p, rings, parts, hairlines) };
 }
 
-function buildRing(p, ring) {
+function buildRing(p, ring, fit) {
   const rng = subRng(p.seed, 'slice', ring.index);
   const { rIn, rOut } = ring;
   const w = rOut - rIn;
@@ -136,7 +156,19 @@ function buildRing(p, ring) {
   let n = 1 + Math.floor(rng() * p.maxSplits);
   while (n > 1 && (cover - (n - 1) * gapAng) / n < minPiece * 1.5) n--;
 
-  const ws = Array.from({ length: n }, () => 0.35 + rng() * (0.65 + p.chaos));
+  let ws = Array.from({ length: n }, () => 0.35 + rng() * (0.65 + p.chaos));
+  if (fit) {
+    // slanted walls lengthen a part beyond its slice angle
+    const maxSpan = Math.max(minPiece, fitSpan(rIn, rOut, fit.L, fit.S) - Math.abs((Math.tan(p.wallAngle * DEG) * w) / rOut));
+    const longest = () => ((cover - (n - 1) * gapAng) * Math.max(...ws)) / ws.reduce((s, v) => s + v, 0);
+    if (longest() > maxSpan) {
+      ws = ws.map(() => 1);
+      while (longest() > maxSpan && n < 400) {
+        n++;
+        ws.push(1);
+      }
+    }
+  }
   const sumWs = ws.reduce((s, v) => s + v, 0);
   const usable = cover - (n - 1) * gapAng;
   const wallSign = rng() < 0.5 ? -1 : 1;

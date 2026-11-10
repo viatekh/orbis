@@ -1,0 +1,286 @@
+// Stage workspace: controls, elevation view, make panel and exports.
+
+import { quantize } from './generator.js';
+import { PALETTES } from './render.js';
+import { MATERIALS } from './fabrication.js';
+import { jobSVG, jobDXF } from './export.js';
+import { zip } from './zip.js';
+import {
+  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, WING_STYLES, STAGE_MATERIALS,
+  normalizeStage, normalizeStageFab, generateStage,
+} from './stage.js';
+import { stageJob, checkStage, settingOutCSV } from './stagefab.js';
+import { elevationSVG, elevationBox, skyColor, STAGE_MODES } from './stagerender.js';
+
+const $ = (sel) => document.querySelector(sel);
+const KEY = 'orbis.stage';
+const MODE_KEY = 'orbis.workspace';
+
+const read = (key, fallback) => {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+const write = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* storage unavailable: settings just don't persist */
+  }
+};
+
+export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
+  const saved = read(KEY, {});
+  const state = {
+    params: normalizeStage(saved.params),
+    fab: normalizeStageFab(saved.fab),
+    mode: STAGE_MODES[saved.mode] ? saved.mode : 'night',
+    palette: PALETTES[saved.palette] ? saved.palette : 'neon',
+    stage: null,
+    job: null,
+  };
+  const inputs = {};
+
+  // ------------------------------------------------------------ workspace switch
+  const setWorkspace = (ws) => {
+    document.body.dataset.mode = ws;
+    document.querySelectorAll('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.ws === ws));
+    write(MODE_KEY, ws);
+    if (ws === 'stage') render();
+    else window.dispatchEvent(new Event('resize'));
+  };
+  $('#modeSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (b) setWorkspace(b.dataset.ws);
+  });
+
+  // ------------------------------------------------------------ controls
+  const host = $('#stageControls');
+  for (const group of STAGE_GROUPS) {
+    const det = document.createElement('details');
+    det.className = 'group';
+    det.open = true;
+    det.innerHTML = `<summary>${group.label}</summary>`;
+    for (const def of STAGE_PARAMS.filter((d) => d.group === group.id)) {
+      const row = document.createElement('div');
+      row.className = 'param';
+      row.innerHTML = `<label for="sp-${def.key}">${def.label}</label>
+        <input class="val" type="number" min="${def.min}" max="${def.max}" step="${def.step}" aria-label="${def.label} value" />
+        <span></span>
+        <input id="sp-${def.key}" type="range" min="${def.min}" max="${def.max}" step="${def.step}" />`;
+      const [num, range] = row.querySelectorAll('input');
+      range.addEventListener('input', () => setParam(def.key, range.value));
+      num.addEventListener('change', () => setParam(def.key, num.value));
+      inputs[def.key] = { num, range, def };
+      det.appendChild(row);
+    }
+    host.appendChild(det);
+  }
+  $('#st-wingStyle').innerHTML = Object.entries(WING_STYLES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  $('#st-material').innerHTML = STAGE_MATERIALS.map((k) => `<option value="${k}">${MATERIALS[k].label}</option>`).join('');
+  $('#st-palette').innerHTML = Object.entries(PALETTES).map(([k, v]) => `<option value="${k}">${v.label} LEDs</option>`).join('');
+  $('#stageModeSeg').innerHTML = Object.entries(STAGE_MODES).map(([k, v]) => `<button data-smode="${k}">${v}</button>`).join('');
+
+  const sync = () => {
+    for (const { num, range, def } of Object.values(inputs)) {
+      const v = state.params[def.key];
+      range.value = v;
+      if (document.activeElement !== num) num.value = v;
+      range.style.setProperty('--pct', `${((v - def.min) / (def.max - def.min)) * 100}%`);
+    }
+    $('#st-wingStyle').value = state.params.wingStyle;
+    $('#st-mirror').checked = state.params.mirror;
+    $('#st-truss').checked = state.params.truss;
+    for (const key of ['sheetW', 'sheetH', 'thickness', 'tool']) {
+      const el = $(`#st-${key}`);
+      if (document.activeElement !== el) el.value = state.fab[key];
+    }
+    $('#st-material').value = state.fab.material;
+    $('#st-labels').checked = state.fab.labels;
+    $('#st-led').checked = state.fab.led;
+    $('#st-palette').value = state.palette;
+    $('#st-palette').hidden = state.mode !== 'night';
+    document.querySelectorAll('#stageModeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.smode === state.mode));
+  };
+
+  function setParam(key, value) {
+    state.params = normalizeStage({ ...state.params, [key]: STAGE_PARAM_MAP[key] ? Number(value) : value });
+    render();
+  }
+  function setFab(key, value) {
+    state.fab = normalizeStageFab({ ...state.fab, [key]: value });
+    render();
+  }
+
+  $('#st-wingStyle').addEventListener('change', (e) => setParam('wingStyle', e.target.value));
+  $('#st-mirror').addEventListener('change', (e) => setParam('mirror', e.target.checked));
+  $('#st-truss').addEventListener('change', (e) => setParam('truss', e.target.checked));
+  for (const key of ['sheetW', 'sheetH', 'thickness', 'tool']) $(`#st-${key}`).addEventListener('change', (e) => setFab(key, e.target.value));
+  $('#st-material').addEventListener('change', (e) => setFab('material', e.target.value));
+  $('#st-labels').addEventListener('change', (e) => setFab('labels', e.target.checked));
+  $('#st-led').addEventListener('change', (e) => setFab('led', e.target.checked));
+  $('#st-palette').addEventListener('change', (e) => {
+    state.palette = e.target.value;
+    render();
+  });
+  $('#stageModeSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    state.mode = b.dataset.smode;
+    render();
+  });
+  $('#btnStageRandom').addEventListener('click', () => {
+    const next = { ...state.params };
+    for (const def of STAGE_PARAMS) if (def.rand) next[def.key] = quantize(def, def.rand[0] + Math.random() * (def.rand[1] - def.rand[0]));
+    const styles = Object.keys(WING_STYLES).filter((k) => k !== 'none');
+    next.wingStyle = styles[Math.floor(Math.random() * styles.length)];
+    state.params = normalizeStage(next);
+    render();
+  });
+  $('#btnStageSeed').addEventListener('click', () => setParam('seed', Math.floor(Math.random() * 1000)));
+  $('#btnStageReset').addEventListener('click', () => {
+    state.params = normalizeStage(STAGE_DEFAULTS);
+    render();
+  });
+  $('#btnEditDisc').addEventListener('click', () => setWorkspace('disc'));
+
+  // ------------------------------------------------------------ render
+  const fileBase = () => `orbis-stage-s${state.params.seed}-${state.params.width}m-${state.params.wingStyle}`;
+  const elevation = (mode = state.mode) => elevationSVG(state.stage, { mode, palette: state.palette, material: MATERIALS[state.fab.material] });
+  let makeTimer;
+
+  function render() {
+    if (document.body.dataset.mode !== 'stage') return;
+    sync();
+    write(KEY, { params: state.params, fab: state.fab, mode: state.mode, palette: state.palette });
+    state.stage = generateStage(state.params, getDisc(), state.fab);
+    state.job = null;
+    $('#elevation').innerHTML = elevation();
+    const box = elevationBox(state.stage);
+    const frame = $('#elevation').parentElement;
+    frame.style.aspectRatio = `${Math.round(box.w)} / ${Math.round(box.h)}`;
+    frame.style.background = skyColor(state.mode);
+    $('#stageName').textContent = `${fileBase()}.svg`;
+    // nesting is the slow part: let slider drags settle first
+    clearTimeout(makeTimer);
+    $('#stageMake').classList.add('stale');
+    makeTimer = setTimeout(renderMake, 180);
+  }
+
+  function ensureJob() {
+    return (state.job ??= stageJob(state.stage));
+  }
+
+  function renderMake() {
+    const stage = state.stage;
+    const job = ensureJob();
+    const s = stage.stats;
+    const label = { ok: 'ok', warn: 'warn', fail: 'fail', info: 'note' };
+    $('#stageChecks').innerHTML = checkStage(stage, job)
+      .map((c) => `<li class="${c.level}"><span class="tag">${label[c.level]}</span><span>${c.text}</span></li>`)
+      .join('');
+    const hours = job.stats.minutes / 60;
+    const rows = [
+      ['Sheets', `${job.sheets} × ${stage.fab.sheetW}×${stage.fab.sheetH}`],
+      ['Panels', s.parts],
+      ['CNC time', `≈ ${hours < 1 ? `${Math.round(job.stats.minutes)} min` : `${hours.toFixed(1)} h`}`],
+      ['Weight', `≈ ${Math.round(s.massKg)} kg`],
+      ['LED run', stage.fab.led ? `≈ ${Math.round(s.ledM)} m` : '—'],
+      ['Deck', `${s.deckModules} × 2×1 m`],
+      ['Facade', `${s.areaM2.toFixed(1)} m²`],
+      ['Truss', stage.truss ? `≈ ${Math.round(s.trussM)} m` : '—'],
+    ];
+    $('#stageEstimate').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+    $('#stagePreview').innerHTML = jobSVG(job, '', { preview: true });
+    $('#stageMake').classList.remove('stale');
+  }
+
+  // ------------------------------------------------------------ exports
+  const meta = () =>
+    `Orbis stage ${Object.entries(state.params).map(([k, v]) => `${k}=${v}`).join(' ')} | sheet=${state.fab.sheetW}x${state.fab.sheetH} t=${state.fab.thickness}mm bit=${state.fab.tool}mm`;
+  const settings = () => JSON.stringify({ app: 'orbis-stage', version: 1, stage: state.params, fab: state.fab, disc: getDisc(), palette: state.palette }, null, 2);
+
+  function readme() {
+    const s = state.stage.stats;
+    const f = state.fab;
+    return [
+      `ORBIS STAGE — ${fileBase()}`,
+      '',
+      `Overall ${s.widthM.toFixed(1)} m wide × ${s.heightM.toFixed(1)} m high. ${s.parts} panels, ${ensureJob().sheets} sheets of ${f.sheetW}×${f.sheetH} × ${f.thickness} mm ${MATERIALS[f.material].label}.`,
+      '',
+      'FILES',
+      '  cut-sheets.svg / .dxf   Nested panels at 1:1 in mm. Layers in cutting order:',
+      '                          LABELS (engrave panel numbers), CUT-INNER (cutouts first), CUT-OUTLINE (last).',
+      '  setting-out.svg         Numbered front elevation on a 1 m grid.',
+      '  setting-out.csv         Each panel: centre offset from the stage centreline and height above ground (mm).',
+      '  elevation-night.svg / elevation-day.svg   Visuals.',
+      '  stage.json              Settings, to reload the design.',
+      '',
+      'BUILD',
+      '  1. Cut the sheets. Panel numbers are engraved on each part and match the setting-out drawing.',
+      '  2. Fix panels to the support structure using the setting-out positions, working outward from the centreline.',
+      f.led ? `  3. LED: roughly ${Math.round(s.ledM)} m to outline every panel edge and trace.` : '',
+      '',
+      'SAFETY',
+      `  ${s.areaM2.toFixed(1)} m² of facade is a wind sail. Structure, fixings, ballast and wind limits must be designed`,
+      '  and signed off by a qualified structural engineer. The truss shown is indicative only.',
+      '',
+    ].join('\n');
+  }
+
+  async function doExport(kind) {
+    const base = fileBase();
+    const job = ensureJob();
+    switch (kind) {
+      case 'sheets':
+        return saveFile(`${base}-cut-sheets.svg`, jobSVG(job, meta()), 'image/svg+xml');
+      case 'dxf':
+        return saveZipped(`${base}-cut-sheets.dxf`, jobDXF(job), 'application/dxf');
+      case 'elevation':
+        return saveFile(`${base}-${state.mode}.svg`, elevation(), 'image/svg+xml');
+      case 'json':
+        return saveFile(`${base}.json`, settings(), 'application/json');
+      case 'kit':
+        return saveFile(
+          `${base}-kit.zip`,
+          zip([
+            { name: `${base}/cut-sheets.svg`, data: jobSVG(job, meta()) },
+            { name: `${base}/cut-sheets.dxf`, data: jobDXF(job) },
+            { name: `${base}/setting-out.svg`, data: elevation('setout') },
+            { name: `${base}/setting-out.csv`, data: settingOutCSV(state.stage) },
+            { name: `${base}/elevation-night.svg`, data: elevation('night') },
+            { name: `${base}/elevation-day.svg`, data: elevation('day') },
+            { name: `${base}/stage.json`, data: settings() },
+            { name: `${base}/README.txt`, data: readme() },
+          ]),
+          'application/zip',
+        );
+    }
+  }
+  $('#stageExports').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-sexport]');
+    if (b) doExport(b.dataset.sexport).catch(() => toast('Export failed'));
+  });
+  $('#stageImport').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (data.app !== 'orbis-stage') throw new Error('not a stage file');
+      state.params = normalizeStage(data.stage);
+      state.fab = normalizeStageFab(data.fab);
+      if (PALETTES[data.palette]) state.palette = data.palette;
+      if (data.disc && typeof data.disc === 'object') setDisc(data.disc);
+      render();
+      toast('Stage loaded');
+    } catch {
+      toast('That is not an Orbis stage file');
+    }
+  });
+
+  setWorkspace(read(MODE_KEY, 'stage') === 'disc' ? 'disc' : 'stage');
+}
