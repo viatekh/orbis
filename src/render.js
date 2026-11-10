@@ -34,6 +34,7 @@ const f2 = (n) => (Math.round(n * 100) / 100).toString();
 export function partPath(part) {
   let d = 'M' + part.points.map(([x, y]) => `${f2(x)} ${f2(y)}`).join('L') + 'Z';
   for (const h of part.holes) d += circlePath(h.x, h.y, h.r);
+  for (const c of part.cuts || []) d += 'M' + c.map(([x, y]) => `${f2(x)} ${f2(y)}`).join('L') + 'Z';
   return d;
 }
 

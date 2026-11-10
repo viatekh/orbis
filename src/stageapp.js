@@ -6,7 +6,7 @@ import { MATERIALS } from './fabrication.js';
 import { jobSVG, jobDXF } from './export.js';
 import { zip } from './zip.js';
 import {
-  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, WING_STYLES, STAGE_MATERIALS,
+  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, TILINGS, MOTIFS, STAGE_MATERIALS,
   normalizeStage, normalizeStageFab, generateStage,
 } from './stage.js';
 import { stageJob, checkStage, settingOutCSV } from './stagefab.js';
@@ -79,7 +79,8 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     }
     host.appendChild(det);
   }
-  $('#st-wingStyle').innerHTML = Object.entries(WING_STYLES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  $('#st-tiling').innerHTML = Object.entries(TILINGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  $('#st-motif').innerHTML = Object.entries(MOTIFS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
   $('#st-material').innerHTML = STAGE_MATERIALS.map((k) => `<option value="${k}">${MATERIALS[k].label}</option>`).join('');
   $('#st-palette').innerHTML = Object.entries(PALETTES).map(([k, v]) => `<option value="${k}">${v.label} LEDs</option>`).join('');
   $('#stageModeSeg').innerHTML = Object.entries(STAGE_MODES).map(([k, v]) => `<button data-smode="${k}">${v}</button>`).join('');
@@ -91,7 +92,8 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
       if (document.activeElement !== num) num.value = v;
       range.style.setProperty('--pct', `${((v - def.min) / (def.max - def.min)) * 100}%`);
     }
-    $('#st-wingStyle').value = state.params.wingStyle;
+    $('#st-tiling').value = state.params.tiling;
+    $('#st-motif').value = state.params.motif;
     $('#st-mirror').checked = state.params.mirror;
     $('#st-truss').checked = state.params.truss;
     for (const key of ['sheetW', 'sheetH', 'thickness', 'tool']) {
@@ -115,7 +117,8 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     render();
   }
 
-  $('#st-wingStyle').addEventListener('change', (e) => setParam('wingStyle', e.target.value));
+  $('#st-tiling').addEventListener('change', (e) => setParam('tiling', e.target.value));
+  $('#st-motif').addEventListener('change', (e) => setParam('motif', e.target.value));
   $('#st-mirror').addEventListener('change', (e) => setParam('mirror', e.target.checked));
   $('#st-truss').addEventListener('change', (e) => setParam('truss', e.target.checked));
   for (const key of ['sheetW', 'sheetH', 'thickness', 'tool']) $(`#st-${key}`).addEventListener('change', (e) => setFab(key, e.target.value));
@@ -135,8 +138,8 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
   $('#btnStageRandom').addEventListener('click', () => {
     const next = { ...state.params };
     for (const def of STAGE_PARAMS) if (def.rand) next[def.key] = quantize(def, def.rand[0] + Math.random() * (def.rand[1] - def.rand[0]));
-    const styles = Object.keys(WING_STYLES).filter((k) => k !== 'none');
-    next.wingStyle = styles[Math.floor(Math.random() * styles.length)];
+    const tilings = Object.keys(TILINGS).filter((k) => k !== 'none');
+    next.tiling = tilings[Math.floor(Math.random() * tilings.length)];
     state.params = normalizeStage(next);
     render();
   });
@@ -148,7 +151,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
   $('#btnEditDisc').addEventListener('click', () => setWorkspace('disc'));
 
   // ------------------------------------------------------------ render
-  const fileBase = () => `orbis-stage-s${state.params.seed}-${state.params.width}m-${state.params.wingStyle}`;
+  const fileBase = () => `orbis-stage-s${state.params.seed}-${state.params.width}m-${state.params.tiling}`;
   const elevation = (mode = state.mode) => elevationSVG(state.stage, { mode, palette: state.palette, material: MATERIALS[state.fab.material] });
   let makeTimer;
 
@@ -167,7 +170,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     // nesting is the slow part: let slider drags settle first
     clearTimeout(makeTimer);
     $('#stageMake').classList.add('stale');
-    makeTimer = setTimeout(renderMake, 180);
+    makeTimer = setTimeout(renderMake, 350);
   }
 
   function ensureJob() {

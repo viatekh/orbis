@@ -14,7 +14,8 @@ npm test         # geometry + export tests (node --test)
 The **Stage** workspace turns the disc into the centrepiece of a festival stage facade, drawn as a to-scale front elevation.
 
 - **Centrepiece**: your current Disc design, scaled to 1–8 m and re-sliced so every ring segment fits one sheet.
-- **Wings**: Fins, Rays or Arcs, mirrored or independent, with height, sweep, fill, tilt and cutout controls. Long blades are split into sheet-length panels automatically.
+- **Panel lattice**: a mandala of convex panels around the disc — Hex, Diamond, Shard or Brick tilings in polar space, so cells keep their shape as they grow outward. A crown silhouette (height, points, depth, squareness), shadow gaps, edge erosion, and automatic subdivision of any cell too big for a sheet.
+- **Fretwork**: every panel is cut with nested slots, fans, louvres or halftone perforation (or a mix by ring), always leaving a minimum web. A raised layer adds smaller panels stood off the lattice for depth.
 - **DJ booth** front, stage deck (2×1 m modules) and an indicative goalpost truss, with 1.75 m figures for scale.
 - **Views**: Night (LED-lit), Day (material) and Setting-out (numbered panels on a 1 m grid).
 - **Make**: sheet size, thickness, bit and material; panels are nested onto sheets with a bill of materials (sheets, CNC time, weight, LED run, deck modules, facade area).

@@ -13,6 +13,7 @@ export function stageJob(stage) {
       id: p.id,
       points: p.points.map(([x, y]) => [x / Q, y / Q]),
       holes: p.holes.map((h) => ({ x: h.x / Q, y: h.y / Q, r: h.r / Q })),
+      cuts: (p.cuts || []).map((c) => c.map(([x, y]) => [x / Q, y / Q])),
       label: [p.label[0] / Q, p.label[1] / Q],
       minWidth: p.minWidth / Q,
       spots: [],
@@ -22,7 +23,7 @@ export function stageJob(stage) {
     params: { minWeb: 1 },
     stats: { outerDiameter: 100 },
     pinned: true,
-    labelSize: 8,
+    labelSize: 5,
   };
   const job = buildJob(small, {
     process: 'cnc', kerf: 0, tool: fab.tool / Q, bedW: fab.sheetW / Q, bedH: fab.sheetH / Q,
@@ -59,12 +60,13 @@ export function checkStage(stage, job) {
 
   const holes = stage.parts.flatMap((pt) => pt.holes);
   const small = holes.filter((h) => h.r * 2 < fab.tool * 1.1).length;
-  if (small) add('fail', `${small} cutouts are smaller than the ${fab.tool} mm bit — use a smaller bit or a larger disc.`);
-  else if (holes.length) add('ok', `${holes.length} cutouts, smallest Ø ${fmt(Math.min(...holes.map((h) => h.r * 2)))} mm.`);
+  if (small) add('fail', `${small} round cutouts are smaller than the ${fab.tool} mm bit — use a smaller bit or a larger disc.`);
+  else add('ok', `${stats.cutouts} cutouts clear the ${fab.tool} mm bit; inside corners get ${fmt(fab.tool / 2)} mm radii.`);
+  if (stats.raised) add('info', `${stats.raised} raised panels stand off the lattice — allow spacers and fixings for each.`);
 
   const thinnest = stage.parts.reduce((m, pt) => Math.min(m, pt.minWidth), Infinity);
   const fragile = Math.max(30, fab.thickness * 2.5);
-  if (thinnest < fragile) add('warn', `Thinnest panel section is ${fmt(thinnest)} mm — fragile in ${fab.thickness} mm sheet. Raise Band Fill on the disc or use a larger Disc Ø.`);
+  if (thinnest < fragile) add('warn', `Thinnest panel section is ${fmt(thinnest)} mm — fragile in ${fab.thickness} mm sheet. Use thicker sheet, a wider Rim, or raise Band Fill on the disc.`);
   else add('ok', `Thinnest panel section ${fmt(thinnest)} mm.`);
 
   const discTop = p.deckHeight + p.lift + p.discDiameter;

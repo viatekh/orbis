@@ -373,18 +373,20 @@ function packSheets(design, fab, k, job, labelSize) {
 
   const items = design.parts.map((p) => {
     const poly = offsetPolygon(p.points, k);
+    // tightest box that fits the sheet; the smallest box overall is not always one that fits
     let best = null;
-    for (let deg = 0; deg < 180; deg += 3) {
-      const a = (deg * Math.PI) / 180;
+    const consider = (a) => {
       const b = bbox(poly.map((pt) => rot(pt, Math.cos(a), Math.sin(a))));
-      if (!best || b.w * b.h < best.b.w * best.b.h) best = { a, b };
-    }
-    // refine around the coarse winner: long straight parts need to sit dead square to fit
-    for (let d = -1.5; d <= 1.5; d += 0.125) {
-      const a = best.a + (d * Math.PI) / 180;
-      const b = bbox(poly.map((pt) => rot(pt, Math.cos(a), Math.sin(a))));
-      if (b.w * b.h < best.b.w * best.b.h - 1e-9) best = { a, b };
-    }
+      const ok = (b.w <= innerW && b.h <= innerH) || (b.w <= innerH && b.h <= innerW);
+      const score = b.w * b.h + (ok ? 0 : 1e15);
+      if (!best || score < best.score - 1e-9) best = { a, b, score };
+    };
+    for (let deg = 0; deg < 180; deg += 3) consider((deg * Math.PI) / 180);
+    // simple polygons sit tightest along one of their own edges
+    if (poly.length <= 12) poly.forEach((pt, i) => consider(-Math.atan2(poly[(i + 1) % poly.length][1] - pt[1], poly[(i + 1) % poly.length][0] - pt[0])));
+    // refine around the winner: long straight parts need to sit dead square to fit
+    const coarse = best.a;
+    for (let d = -1.5; d <= 1.5; d += 0.125) consider(coarse + (d * Math.PI) / 180);
     let a = best.a + (best.b.h > best.b.w ? Math.PI / 2 : 0); // long side along the bed
     let o = orient(poly, a, gap);
     if (o.b.w > innerW && o.b.w <= innerH && o.b.h <= innerW) o = orient(poly, (a += Math.PI / 2), gap);
@@ -464,6 +466,7 @@ function packSheets(design, fab, k, job, labelSize) {
         const [hx, hy] = tf([h.x, h.y]);
         job.inner.circles.push({ x: hx, y: hy, r: Math.max(0.05, h.r - k) });
       }
+      for (const c of it.p.cuts || []) job.inner.polys.push(c.map(tf));
       if (fab.labels) {
         const [lx, ly] = tf(it.p.label);
         job.labels.push({ x: lx, y: ly, text: it.p.id, size: labelSize });

@@ -52,7 +52,7 @@ export function elevationSVG(stage, { mode = 'night', palette = 'neon', material
   const topY = -vb.y;
   const ns = 'vector-effect="non-scaling-stroke"';
   let out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${f0(vb.x)} ${f0(vb.y)} ${f0(vb.w)} ${f0(vb.h)}" preserveAspectRatio="xMidYMax meet">`;
-  out += `<defs><filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="45" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+  out += `<defs><filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="28" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
   out += `<radialGradient id="haze" cx="50%" cy="60%" r="60%"><stop offset="0" stop-color="${paletteColor(palette, 0.5)}" stop-opacity="0.16"/><stop offset="1" stop-color="${paletteColor(palette, 0.5)}" stop-opacity="0"/></radialGradient></defs>`;
   out += `<rect x="${f0(vb.x)}" y="${f0(vb.y)}" width="${f0(vb.w)}" height="${f0(vb.h)}" fill="${th.sky}"/>`;
   if (mode === 'night') out += `<rect x="${f0(vb.x)}" y="${f0(vb.y)}" width="${f0(vb.w)}" height="${f0(topY)}" fill="url(#haze)"/>`;
@@ -70,13 +70,14 @@ export function elevationSVG(stage, { mode = 'night', palette = 'neon', material
     out += `<path d="${d}" fill="none" stroke="${th.truss}" stroke-width="1.2" ${ns}/>`;
   }
 
-  const style = (t) => {
-    if (mode === 'day') return `fill="${mat.fill}" stroke="${mat.edge}" stroke-width="1"`;
-    if (mode === 'setout') return `fill="#ffffff" stroke="${th.ink}" stroke-width="1.1"`;
-    return `fill="#0e1216" stroke="${paletteColor(palette, t)}" stroke-width="1.6"`;
+  const style = (pt) => {
+    const raised = pt.z === 1;
+    if (mode === 'day') return `fill="${mat.fill}" ${raised ? '' : 'fill-opacity="0.8" '}stroke="${mat.edge}" stroke-width="${raised ? 1.3 : 0.8}"`;
+    if (mode === 'setout') return `fill="${raised ? '#eef1f4' : '#ffffff'}" stroke="${th.ink}" stroke-width="${raised ? 1.2 : 0.8}"`;
+    return `fill="${raised ? '#182028' : '#0c1014'}" stroke="${paletteColor(palette, pt.t)}" stroke-width="${raised ? 1.5 : 1}"`;
   };
-  const group = (el) => {
-    const parts = stage.parts.filter((pt) => pt.el === el);
+  const group = (el, z = null) => {
+    const parts = stage.parts.filter((pt) => pt.el === el && (z === null || pt.z === z));
     if (!parts.length) return '';
     let g = `<g${mode === 'night' ? ' filter="url(#glow)"' : ''}>`;
     if (el === 'centre' && mode !== 'setout') {
@@ -88,11 +89,11 @@ export function elevationSVG(stage, { mode = 'night', palette = 'neon', material
       }
       g += '</g>';
     }
-    for (const pt of parts) g += `<path d="${partPath(pt)}" fill-rule="evenodd" ${style(pt.t)} ${ns}/>`;
+    for (const pt of parts) g += `<path d="${partPath(pt)}" fill-rule="evenodd" ${style(pt)} ${ns}/>`;
     return g + '</g>';
   };
 
-  out += group('wing') + group('centre');
+  out += group('facade', 0) + group('facade', 1) + group('centre');
   // the DJ stands behind the booth, on the deck
   if (p.boothWidth >= 0.5) out += figure(0, -deck.h, th.figure);
   out += group('booth');
@@ -105,7 +106,7 @@ export function elevationSVG(stage, { mode = 'night', palette = 'neon', material
   out += figure(-extent.half - 900, 0, th.figure) + figure(extent.half + 700, 0, th.figure);
 
   if (mode === 'setout') {
-    const fs = Math.max(90, vb.w / 150);
+    const fs = Math.max(70, vb.w / 230);
     out += `<g font-family="monospace" font-size="${f0(fs)}" fill="${th.ink}" text-anchor="middle" dominant-baseline="central">`;
     for (const pt of stage.parts) out += `<text x="${f0(pt.label[0])}" y="${f0(pt.label[1])}">${pt.id}</text>`;
     out += '</g>';
