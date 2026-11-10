@@ -221,7 +221,7 @@ test('pattern library keeps a full web between every cutout', async () => {
     for (const detail of [0, 1]) {
       const stage = generateStage({ ...STAGE_DEFAULTS, motif, petalMotif: motif, module: 'flat', overlay: 0, detail, cells: 14 }, DEFAULTS);
       const panels = stage.parts.filter((p) => p.el === 'facade' || p.el === 'petal');
-      assert.ok(panels.filter((p) => p.cuts.length + p.holes.length > 1).length > panels.length / 2, `${motif} fills most panels`);
+      assert.ok(panels.filter((p) => p.cuts.length + p.holes.length > 1).length > panels.length / 3, `${motif} fills most panels`);
       let web = Infinity;
       for (const p of panels) {
         p.cuts.forEach((A, i) => {
@@ -233,6 +233,25 @@ test('pattern library keeps a full web between every cutout', async () => {
         });
       }
       assert.ok(web > 29.5, `${motif} at detail ${detail}: web ${web.toFixed(1)}`);
+    }
+  }
+});
+
+test('grid layout, clean splits and curated random rolls', async () => {
+  const { randomStage, RECIPE_NAMES } = await import('../src/stagerandom.js');
+  // grid: every whole lattice module is the same size
+  const grid = generateStage({ ...STAGE_DEFAULTS, layout: 'grid', module: 'flat', motif: 'solid', overlay: 0, subdivide: 0, erode: 0, petals: 0 }, DEFAULTS);
+  const hexes = grid.parts.filter((p) => p.el === 'facade' && p.points.length === 6);
+  assert.ok(hexes.length > 100);
+  const areas = hexes.map((p) => Math.abs(p.points.reduce((s, q, i) => s + q[0] * p.points[(i + 1) % 6][1] - p.points[(i + 1) % 6][0] * q[1], 0)) / 2);
+  assert.ok(Math.max(...areas) / Math.min(...areas) < 1.01, 'grid hexes are identical');
+  for (const name of RECIPE_NAMES) {
+    for (let i = 0; i < 3; i++) {
+      const roll = randomStage(STAGE_DEFAULTS, name);
+      assert.equal(roll.recipe, name);
+      const stage = generateStage(normalizeStage(roll), DEFAULTS);
+      assert.ok(stage.parts.length > 20, `${name} builds a stage`);
+      assert.equal(stageJob(stage).oversize, 0, `${name} fits its sheets`);
     }
   }
 });

@@ -45,7 +45,7 @@ export function stageJob(stage) {
     engrave: { arcs: [], dots: [], polys: job.engrave.polys.map((poly) => poly.map(([x, y]) => [x * Q, y * Q])), lines: job.engrave.lines.map((l) => l.map(([x, y]) => [x * Q, y * Q])) },
     labels: job.labels.map((l) => ({ ...l, x: l.x * Q, y: l.y * Q, size: l.size * Q })),
     guides: job.guides.map((g) => ({ ...g, x: g.x * Q, y: g.y * Q, w: g.w * Q, h: g.h * Q })),
-    bounds: { x: job.bounds.x * Q, y: job.bounds.y * Q, w: job.bounds.w * Q, h: job.bounds.h * Q },
+    bounds: Number.isFinite(job.bounds.w) ? { x: job.bounds.x * Q, y: job.bounds.y * Q, w: job.bounds.w * Q, h: job.bounds.h * Q } : { x: 0, y: 0, w: fab.sheetW, h: fab.sheetH },
     notes: [],
     sheets: job.sheets,
     oversize: job.oversize,

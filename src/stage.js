@@ -18,7 +18,8 @@ const EDGE = 40; // sheet margin kept clear on every side
 const DISC_REF = 1000; // the disc is generated at this diameter, then scaled
 
 export const TILINGS = { hex: 'Hex', diamond: 'Diamond', shard: 'Shard', brick: 'Brick', none: 'None' };
-export const MODULES = { stepped: 'Stepped', pyramid: 'Folded', scales: 'Scales', flat: 'Flat' };
+export const MODULES = { stepped: 'Stepped', pyramid: 'Folded', mix: 'Star & frame', scales: 'Scales', flat: 'Flat' };
+export const LAYOUTS = { radial: 'Radial', grid: 'Grid' };
 export const MOTIFS = { mixed: 'Mixed', window: 'Window', slots: 'Nested slots', fan: 'Fan', rays: 'Slat fan', louvre: 'Louvre', perf: 'Perforated', ...PATTERNS, solid: 'Solid' };
 export const CENTRES = { disc: 'Ring disc', iris: 'Iris', star: 'Star', rosette: 'Rosette', mandala: 'Mandala', opening: 'Void', none: 'No core' };
 export const PETAL_SHAPES = { leaf: 'Leaf', eye: 'Eye', teardrop: 'Teardrop', diamond: 'Diamond', blade: 'Blade', freeform: 'Freeform' };
@@ -105,7 +106,7 @@ export const STAGE_PARAM_MAP = Object.fromEntries(STAGE_PARAMS.map((p) => [p.key
 
 const CHOICES = {
   tiling: TILINGS, module: MODULES, motif: MOTIFS, centre: CENTRES, form: FORMS, petalShape: PETAL_SHAPES,
-  etchPattern: ETCH_PATTERNS, tendrilStyle: TENDRIL_STYLES,
+  etchPattern: ETCH_PATTERNS, tendrilStyle: TENDRIL_STYLES, layout: LAYOUTS,
   coreModule: PIECE_MODULES, coreMotif: PIECE_MOTIFS, spikeModule: PIECE_MODULES, spikeMotif: PIECE_MOTIFS, petalMotif: PIECE_MOTIFS,
 };
 // Each piece can follow the lattice cell or carry its own module and fretwork.
@@ -115,6 +116,7 @@ const FLAGS = ['mirror', 'truss', 'backlit'];
 export const STAGE_DEFAULTS = {
   ...Object.fromEntries(STAGE_PARAMS.map((p) => [p.key, p.def])),
   tiling: 'hex',
+  layout: 'radial',
   module: 'stepped',
   motif: 'mixed',
   centre: 'disc',
@@ -257,12 +259,27 @@ function tilingCells(tiling, N, uMax) {
   return cells;
 }
 
-function subdivide(poly, parity) {
+// Splits are chosen to look deliberate: a hexagon becomes a centre with six matching
+// surrounds, a diamond two mirrored halves, anything long is halved across its length.
+function subdivide(poly) {
   const c = centroid(poly);
   const k = poly.length;
   const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  if (k === 6) return [0, 2, 4].map((s) => [c, poly[(s + parity) % 6], poly[(s + parity + 1) % 6], poly[(s + parity + 2) % 6]]);
-  if (k === 4) return parity ? [[poly[0], poly[1], poly[2]], [poly[0], poly[2], poly[3]]] : [[poly[1], poly[2], poly[3]], [poly[1], poly[3], poly[0]]];
+  const len = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  if (k === 6) {
+    const inner = poly.map((q) => mid(q, c));
+    return [inner, ...poly.map((q, i) => [q, poly[(i + 1) % 6], inner[(i + 1) % 6], inner[i]])];
+  }
+  if (k === 4) {
+    const sides = poly.map((q, i) => len(q, poly[(i + 1) % 4]));
+    if (Math.max(...sides) < Math.min(...sides) * 1.25) {
+      // a diamond: cut along the shorter diagonal
+      return len(poly[0], poly[2]) < len(poly[1], poly[3]) ? [[poly[0], poly[1], poly[2]], [poly[0], poly[2], poly[3]]] : [[poly[1], poly[2], poly[3]], [poly[1], poly[3], poly[0]]];
+    }
+    const i = sides[0] + sides[2] > sides[1] + sides[3] ? 0 : 1;
+    const [m0, m1] = [mid(poly[i], poly[i + 1]), mid(poly[i + 2], poly[(i + 3) % 4])];
+    return [[poly[i], m0, m1, poly[(i + 3) % 4]], [m0, poly[i + 1], poly[i + 2], m1]];
+  }
   if (k === 3) {
     const [m0, m1, m2] = [mid(poly[0], poly[1]), mid(poly[1], poly[2]), mid(poly[2], poly[0])];
     return [[poly[0], m0, m2], [m0, poly[1], m1], [m2, m1, poly[2]], [m0, m1, m2]];
@@ -276,7 +293,7 @@ function refine(poly, depth, o) {
   const roll = o.rng();
   const roomy = inradius(poly) > o.minInr * 2.6;
   const wanted = roomy && depth < 2 && !(o.axis && depth > 0) && roll < o.want;
-  if (depth < 5 && (must || wanted)) return subdivide(poly, (depth + o.parity) % 2).flatMap((ch) => refine(ch, depth + 1, o));
+  if (depth < 5 && (must || wanted)) return subdivide(poly).flatMap((ch) => refine(ch, depth + 1, o));
   return [poly];
 }
 
@@ -717,26 +734,46 @@ function buildFacade(p, ctx, holes) {
     return base * (1 - p.crownDepth * (1 - peak));
   };
   const rMax = Math.max(rTop, rSide) * 1.05;
-  const uMax = Math.log(rMax / rBase) / (dv * p.stretch);
-  const toXY = ([u, v]) => {
-    const r = rBase * Math.exp(u * dv * p.stretch);
-    const a = Math.PI / 2 - v * dv;
-    return [r * Math.cos(a), -cy - r * Math.sin(a)];
-  };
+  const grid = p.layout === 'grid';
+  const gridS = Math.min(Math.max(W / N, 420), S / 1.2);
+  let cellsIn;
+  let toXY;
+  if (grid) {
+    // a regular lattice: every module the same size and shape, like a wall of identical pods
+    const s = gridS;
+    const step = { hex: 0.75 * (2 / Math.sqrt(3)), diamond: 0.62, shard: 0.8, brick: 0.72 }[p.tiling] || 1;
+    const iC = 2 * Math.ceil((cy - deckH) / (s * step) / 2 + 1);
+    const first = { hex: 1 / Math.sqrt(3), diamond: 0.62, shard: 0.8, brick: 0.36 }[p.tiling] || 0;
+    const uC = first + iC * step + (p.tiling === 'shard' ? 0.4 : 0);
+    toXY = ([u, v]) => [v * s, -cy - (u - uC) * s];
+    cellsIn = tilingCells(p.tiling, 2 * Math.ceil(W / s / 2 + 2), (iC + rTop / (s * step) + 2) * step);
+  } else {
+    toXY = ([u, v]) => {
+      const r = rBase * Math.exp(u * dv * p.stretch);
+      const a = Math.PI / 2 - v * dv;
+      return [r * Math.cos(a), -cy - r * Math.sin(a)];
+    };
+    cellsIn = tilingCells(p.tiling, N, Math.log(rMax / rBase) / (dv * p.stretch));
+  }
+  const rHole = p.centre === 'none' ? 0 : ctx.rInner + 60 + (p.petals ? Math.min(p.petalLength * M, L) * 0.3 : 0);
   const shift = p.seed % MIX.length;
   const parts = [];
 
-  for (const cell of tilingCells(p.tiling, N, uMax)) {
+  // pass 1: which cells survive the silhouette, the erosion and the clipping
+  const kept = [];
+  for (const cell of cellsIn) {
     if (p.mirror && cell.cv < -1e-9) continue; // the left half is a mirror image of the right
-    const axis = p.mirror && (Math.abs(cell.cv) < 1e-9 || Math.abs(cell.cv - N / 2) < 1e-9);
-    const rng = subRng(p.seed, 'cell', cell.i, Math.round(cell.cv * 2), cell.k);
+    const axis = p.mirror && (Math.abs(cell.cv) < 1e-9 || (!grid && Math.abs(cell.cv - N / 2) < 1e-9));
     const raw = cell.verts.map(toXY);
     const c = centroid(raw);
     const rc = Math.hypot(c[0], c[1] + cy);
+    const ring = grid ? Math.round(rc / gridS / 0.9) : cell.i;
+    const rng = subRng(p.seed, 'cell', cell.i, Math.round(cell.cv * 2), cell.k);
     const lim = silhouette(Math.atan2(c[0], -(c[1] + cy)));
     const edge = rc / lim;
     const erodeRoll = rng();
     if (edge > 1) continue;
+    if (grid && rHole && [c, ...raw].some(([x, y]) => Math.hypot(x, y + cy) < rHole)) continue;
     if (edge > 0.7 && erodeRoll < (p.erode * (edge - 0.7)) / 0.3) continue;
     // medallions punch clean holes through the lattice
     if (holes.some((h) => [c, ...raw].some(([x, y]) => Math.hypot(Math.abs(x) - h.x, y - h.y) < h.r))) continue;
@@ -744,26 +781,71 @@ function buildFacade(p, ctx, holes) {
     let poly = clipHalf(raw, 0, 1, -(deckH + 30));
     poly = clipHalf(clipHalf(poly, 1, 0, W / 2), -1, 0, W / 2);
     if (poly.length < 3 || area(poly) < 0.45 * area(raw) || area(poly) < 6e4) continue;
+    const keys = cell.verts.map(([u, v]) => `${Math.round(u * 50)},${Math.round(v * 50)}`);
+    // cells on the centreline, against the core or standing on the deck are anchored
+    const anchored = (p.mirror && raw.some(([x]) => Math.abs(x) < (grid ? gridS : 1) * 0.6 + 1)) || (!grid && cell.i === 0) || poly.length !== raw.length || raw.some(([, y]) => y > -(deckH + 30) - 1);
+    kept.push({ cell, axis, raw, c, rc, ring, rng, edge, poly, keys, anchored, alive: true });
+  }
+  // drop loners and stray islands: a module hanging off the edge by one side, or a
+  // clump cut off from the rest, reads as a mistake
+  const need = p.tiling === 'shard' || p.tiling === 'brick' ? 1 : 2;
+  const byPoint = new Map();
+  kept.forEach((k, id) => {
+    if (p.tiling === 'brick') k.cell.verts.forEach(([u, v], i) => {
+      const [u2, v2] = k.cell.verts[(i + 1) % k.cell.verts.length];
+      k.keys.push(`${Math.round((u + u2) * 25)},${Math.round((v + v2) * 25)}`);
+    });
+    for (const key of k.keys) byPoint.set(key, [...(byPoint.get(key) || []), id]);
+  });
+  kept.forEach((k, id) => {
+    const seen = new Map();
+    for (const key of k.keys) for (const other of byPoint.get(key)) if (other !== id) seen.set(other, (seen.get(other) || 0) + 1);
+    k.next = [...seen].filter(([, n]) => n >= 2).map(([other]) => other);
+  });
+  for (let pass = 0; pass < 3; pass++) {
+    for (const k of kept) if (k.alive && k.next.filter((o) => kept[o].alive).length + (k.anchored ? 1 : 0) < need) k.alive = false;
+  }
+  const group = new Array(kept.length).fill(-1);
+  const sizes = [];
+  kept.forEach((k, id) => {
+    if (!k.alive || group[id] >= 0) return;
+    const g = sizes.length;
+    const stack = [id];
+    group[id] = g;
+    let n = 0;
+    while (stack.length) {
+      const cur = stack.pop();
+      n++;
+      for (const o of kept[cur].next) if (kept[o].alive && group[o] < 0) { group[o] = g; stack.push(o); }
+    }
+    sizes.push(n);
+  });
+  const main = sizes.indexOf(Math.max(...sizes));
+  kept.forEach((k, id) => { if (group[id] !== main) k.alive = false; });
 
+  for (const { cell, axis, c, rc, ring, rng, edge, poly, alive } of kept) {
+    if (!alive) continue;
     const t = clamp(1 - (rc - rBase) / (rMax * 0.8 - rBase), 0, 1);
     const pieces = refine(poly, 0, {
-      L, S, rng, axis, parity: (cell.i + cell.k) % 2, minInr: Math.max(web * 1.6, 90),
+      L, S, rng, axis, parity: (ring + cell.k) % 2, minInr: Math.max(web * 1.6, 90),
       want: p.subdivide * (0.3 + 0.7 * edge),
     });
+    // one module, one motif: the pieces of a split cell stay a matching set
+    const rollMotif = rng();
+    const rollPick = rng();
+    let motif = p.motif;
+    if (motif === 'mixed') motif = rollMotif < p.chaos * 0.5 ? MIX[Math.floor(rollPick * MIX.length)] : MIX[(ring + shift) % MIX.length];
+    const module = p.module === 'mix' ? (ring % 2 ? 'stepped' : 'pyramid') : p.module;
     for (const piece of pieces) {
       const P = insetConvex(piece, p.joint / 2);
-      const rollMotif = rng();
-      const rollPick = rng();
       const overlayRoll = rng();
       if (!P || inradius(P) < web * 0.9) continue;
       const pc = centroid(P);
-      let motif = p.motif;
-      if (motif === 'mixed') motif = rollMotif < p.chaos * 0.5 ? MIX[Math.floor(rollPick * MIX.length)] : MIX[(cell.i + shift) % MIX.length];
       parts.push(
         ...modulePanels(P, {
-          module: p.module, motif, depth: p.depth, steps: p.steps, overlay: p.overlay, overlayRoll, z0: ctx.zOf('facade'), t, el: 'facade',
-          lift: ctx.lift, origin: [0, -cy], parity: cell.i % 2,
-          opts: { ...ctx.fret, ang: Math.atan2(pc[1] + cy, pc[0]), parity: cell.i % 2, reserve: 0 },
+          module, motif, depth: p.depth, steps: p.steps, overlay: p.overlay, overlayRoll, z0: ctx.zOf('facade'), t, el: 'facade',
+          lift: ctx.lift, origin: [0, -cy], parity: ring % 2,
+          opts: { ...ctx.fret, ang: Math.atan2(pc[1] + cy, pc[0]), parity: ring % 2, reserve: 0 },
         }),
       );
     }
@@ -1117,7 +1199,7 @@ export function sourcePanels(input, fabInput = {}, only = null) {
     const HEX = [0, 1, 2, 3, 4, 5].map((i) => [520 * Math.sin((i * Math.PI) / 3), -520 * Math.cos((i * Math.PI) / 3)]);
     const shape = { hex: HEX, diamond: [[0, -640], [420, 0], [0, 640], [-420, 0]], shard: [[0, -560], [500, 320], [-500, 320]], brick: [[-560, -360], [560, -360], [560, 360], [-560, 360]] }[p.tiling] || HEX;
     out.cell = modulePanels(shape, {
-      module: p.module, motif: p.motif === 'mixed' ? MIX[p.seed % MIX.length] : p.motif, depth: p.depth, steps: p.steps,
+      module: p.module === 'mix' ? 'pyramid' : p.module, motif: p.motif === 'mixed' ? MIX[p.seed % MIX.length] : p.motif, depth: p.depth, steps: p.steps,
       overlay: p.overlay, overlayRoll: 0.5, z0: 0, t: 0.5, el: 'facade', origin: [0, 2000], opts,
     });
   }

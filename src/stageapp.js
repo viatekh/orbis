@@ -6,11 +6,12 @@ import { MATERIALS } from './fabrication.js';
 import { jobSVG, jobDXF } from './export.js';
 import { zip } from './zip.js';
 import {
-  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, TILINGS, MODULES, MOTIFS, CENTRES, FORMS, PRINT_SETS, PETAL_SHAPES, PIECE_MODULES, PIECE_MOTIFS, LAYERS, ETCH_PATTERNS, TENDRIL_STYLES, STAGE_MATERIALS, scaleStage,
+  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, TILINGS, LAYOUTS, MODULES, MOTIFS, CENTRES, FORMS, PRINT_SETS, PETAL_SHAPES, PIECE_MODULES, PIECE_MOTIFS, LAYERS, ETCH_PATTERNS, TENDRIL_STYLES, STAGE_MATERIALS, scaleStage,
   normalizeStage, normalizeStageFab, generateStage, sourcePanels,
 } from './stage.js';
 import { stageJob, checkStage, settingOutCSV, printFiles } from './stagefab.js';
 import { STAGE_PRESETS } from './stagepresets.js';
+import { randomStage } from './stagerandom.js';
 import { elevationSVG, elevationBox, skyColor, sourceSVG, STAGE_MODES } from './stagerender.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -94,7 +95,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     }
     host.appendChild(det);
   }
-  const SELECTS = { tiling: TILINGS, form: FORMS, etchPattern: ETCH_PATTERNS, tendrilStyle: TENDRIL_STYLES };
+  const SELECTS = { tiling: TILINGS, layout: LAYOUTS, form: FORMS, etchPattern: ETCH_PATTERNS, tendrilStyle: TENDRIL_STYLES };
   const CHECKS = ['mirror', 'backlit', 'truss'];
   for (const [key, set] of Object.entries(SELECTS)) {
     $(`#st-${key}`).innerHTML = Object.entries(set).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
@@ -157,6 +158,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     e.target.value = '';
     if (!preset) return;
     state.params = normalizeStage({ ...STAGE_DEFAULTS, ...preset, seed: state.params.seed });
+    if (PALETTES[preset.palette]) state.palette = preset.palette;
     render();
     renderVariations();
   });
@@ -223,17 +225,14 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     });
   }
 
+  // Randomise rolls a whole family of stage (see stagerandom.js), not every slider independently.
   $('#btnStageRandom').addEventListener('click', () => {
-    const next = { ...state.params };
-    for (const def of STAGE_PARAMS) if (def.rand) next[def.key] = quantize(def, def.rand[0] + Math.random() * (def.rand[1] - def.rand[0]));
-    const tilings = Object.keys(TILINGS).filter((k) => k !== 'none');
-    next.tiling = tilings[Math.floor(Math.random() * tilings.length)];
-    const pick = (set) => Object.keys(set)[Math.floor(Math.random() * Object.keys(set).length)];
-    next.module = pick(MODULES);
-    next.centre = pick(CENTRES);
-    next.form = Math.random() < 0.5 ? 'flat' : pick(FORMS);
-    state.params = normalizeStage(next);
+    const roll = randomStage(STAGE_DEFAULTS);
+    state.params = normalizeStage(roll);
+    state.palette = roll.palette;
     render();
+    renderVariations();
+    toast(`${roll.recipe} — roll again for another family`);
   });
   $('#btnStageSeed').addEventListener('click', () => setParam('seed', Math.floor(Math.random() * 1000)));
   $('#btnStageReset').addEventListener('click', () => {
