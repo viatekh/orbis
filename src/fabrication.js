@@ -470,6 +470,7 @@ function packSheets(design, fab, k, job, labelSize) {
         job.inner.circles.push({ x: hx, y: hy, r: Math.max(0.05, h.r - k) });
       }
       for (const c of it.p.cuts || []) job.inner.polys.push(c.map(tf));
+      for (const e of it.p.etch || []) job.engrave.polys.push(e.map(tf));
       if (fab.labels) {
         const [lx, ly] = tf(it.p.label);
         job.labels.push({ x: lx, y: ly, text: it.p.id, size: labelSize });

@@ -360,3 +360,15 @@ body[data-mode='stage'] .disc-only, body:not([data-mode='stage']) .stage-only { 
 #stageVariations .var { aspect-ratio: 16 / 10; }
 #stageVariations .var svg { inset: 0 0 22px; width: 100%; height: calc(100% - 22px); }
 #stageExports { grid-template-columns: repeat(2, 1fr); }
+.source-editor { gap: 8px; }
+.source-editor .source-view { aspect-ratio: 16 / 11; }
+.gallery-head { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; color: var(--muted); font-weight: 600; margin: 6px 0 4px; }
+.gallery { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.gallery button { padding: 0; overflow: hidden; display: flex; flex-direction: column; background: #07090d; border-color: var(--line); }
+.gallery button svg { width: 100%; aspect-ratio: 1; display: block; }
+.gallery button span { font-size: 10px; line-height: 1.15; padding: 3px 2px; background: var(--surface); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gallery button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.gallery button.text { background: var(--surface-2); justify-content: center; min-height: 36px; }
+.gallery button.text span { background: none; white-space: normal; }
+#stageZoomSeg button { flex: none; min-width: 30px; }
+.elevation { touch-action: none; }

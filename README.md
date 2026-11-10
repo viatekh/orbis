@@ -14,7 +14,9 @@ npm test         # geometry + export tests (node --test)
 The **Stage** workspace turns the disc into the centrepiece of a festival stage facade, drawn as a to-scale front elevation.
 
 - **Everything is a flat panel placed in 3D.** Each part keeps its flat cut shape plus a position, so panels can stand off the back plane, step forward or back, or tilt into folded forms. Drag the view to orbit.
-- **Source pieces**: one origin cell and one origin petal are shown on their own; every instance on the stage is spawned from them.
+- **Source pieces**: the cell, petal, spike and core each have a tab with a large preview and a gallery of every option drawn on that piece, so you can see what a choice does before picking it. Petals, spikes and the core can follow the cell or carry their own module and fretwork. Petal shapes: leaf, eye, teardrop, diamond, blade.
+- **Etch lines**: score-only detail that follows each panel's outline inside the rim, exported on the engrave layer.
+- **View**: drag to orbit, scroll or pinch to zoom, Shift-drag to pan.
 - **Modules**: *Stepped* (nested frames stepping forward, or back for a portal look), *Folded* (each cell becomes a pyramid of tilted faces, cut at true size), *Scales* (panels hinged up from their inner edge like shingles), or *Flat* with raised islands.
 - **Fretwork**: window (frame for diffuser), nested slots, fan, slat fan, louvre, halftone perforation, or a mix by ring. A minimum web is always kept. *Backlit* lights every cutout.
 - **Cores**: your Disc design as a layered medallion, Iris (radial segments), Star, Rosette (a ring of hexagons round a centre), a Void, or no core at all. *Core Gap* opens a clear ring between the core and everything around it. Side medallions use the same core type.

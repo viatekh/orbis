@@ -59,11 +59,12 @@ export function panelsMarkup(parts, cam, { mode, palette, mat, backlit, draft = 
       for (const c of pt.cuts || []) d += pathOf(c.map(place));
       for (const h of pt.holes) d += pathOf(circle(h).map(place));
     }
-    return { pt, d, glow: pathOf(outline), lit, depth: outline.reduce((s, q) => s + q[2], 0) / outline.length };
+    const etch = draft ? '' : (pt.etch || []).map((e) => pathOf(e.map(place))).join('');
+    return { pt, d, etch, glow: pathOf(outline), lit, depth: outline.reduce((s, q) => s + q[2], 0) / outline.length };
   });
   items.sort((a, b) => a.depth - b.depth);
   let out = '';
-  for (const { pt, d, glow, lit } of items) {
+  for (const { pt, d, etch, glow, lit } of items) {
     const k = lit * (1 + 0.07 * (pt.layer || 0));
     const color = paletteColor(palette, pt.t);
     if (mode === 'night') {
@@ -75,6 +76,7 @@ export function panelsMarkup(parts, cam, { mode, palette, mat, backlit, draft = 
     } else {
       out += `<path d="${d}" fill-rule="evenodd" fill="${shade('#f2f4f6', Math.min(1.05, k))}" stroke="#16181c" stroke-width="0.8" ${ns}/>`;
     }
+    if (etch) out += `<path d="${etch}" fill="none" stroke="${mode === 'night' ? color : mode === 'day' ? mat.edge : '#8a9098'}" stroke-opacity="0.45" stroke-width="0.6" ${ns}/>`;
   }
   return out;
 }
@@ -104,7 +106,7 @@ function trussLines(x, y, w, h) {
   return lines;
 }
 
-export function elevationSVG(stage, { mode = 'night', palette = 'neon', material = null, yaw = 0, pitch = 0, draft = false } = {}) {
+export function elevationSVG(stage, { mode = 'night', palette = 'neon', material = null, yaw = 0, pitch = 0, draft = false, view = null } = {}) {
   if (mode === 'setout') yaw = pitch = 0;
   const th = THEMES[mode] || THEMES.night;
   const mat = material || { fill: '#dcc196', edge: '#6b4a26' };
@@ -116,7 +118,8 @@ export function elevationSVG(stage, { mode = 'night', palette = 'neon', material
   const line = (pts3) => 'M' + pts3.map((q) => cam.point(q)).map(([x, y]) => `${f0(x)} ${f0(y)}`).join('L');
   const quad = (pts3, attrs) => `<path d="${line(pts3)}Z" ${attrs} ${ns}/>`;
 
-  let out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${f0(vb.x)} ${f0(vb.y)} ${f0(vb.w)} ${f0(vb.h)}" preserveAspectRatio="xMidYMax meet">`;
+  const shown = view || vb;
+  let out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${f0(shown.x)} ${f0(shown.y)} ${f0(shown.w)} ${f0(shown.h)}" preserveAspectRatio="xMidYMax meet">`;
   out += `<defs><filter id="glow" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="26" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
   out += `<radialGradient id="haze" cx="50%" cy="55%" r="60%"><stop offset="0" stop-color="${paletteColor(palette, 0.5)}" stop-opacity="0.16"/><stop offset="1" stop-color="${paletteColor(palette, 0.5)}" stop-opacity="0"/></radialGradient></defs>`;
   out += `<rect x="${f0(vb.x)}" y="${f0(vb.y)}" width="${f0(vb.w)}" height="${f0(vb.h)}" fill="${th.sky}"/>`;
@@ -203,7 +206,7 @@ export function elevationSVG(stage, { mode = 'night', palette = 'neon', material
 }
 
 // The origin cell (and petal) on their own, tilted so the relief reads.
-export function sourceSVG(parts, { mode = 'night', palette = 'neon', material = null, backlit = true } = {}) {
+export function sourceSVG(parts, { mode = 'night', palette = 'neon', material = null, backlit = true, simple = false } = {}) {
   const th = THEMES[mode] || THEMES.night;
   const mat = material || { fill: '#dcc196', edge: '#6b4a26' };
   if (!parts.length) return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="${th.sky}"/></svg>`;
@@ -216,5 +219,5 @@ export function sourceSVG(parts, { mode = 'night', palette = 'neon', material = 
     }
   }
   const pad = Math.max(x1 - x0, y1 - y0) * 0.08;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${f0(x0 - pad)} ${f0(y0 - pad)} ${f0(x1 - x0 + 2 * pad)} ${f0(y1 - y0 + 2 * pad)}"><rect x="${f0(x0 - pad)}" y="${f0(y0 - pad)}" width="${f0(x1 - x0 + 2 * pad)}" height="${f0(y1 - y0 + 2 * pad)}" fill="${th.sky}"/>${panelsMarkup(parts, cam, { mode: mode === 'setout' ? 'day' : mode, palette, mat, backlit })}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${f0(x0 - pad)} ${f0(y0 - pad)} ${f0(x1 - x0 + 2 * pad)} ${f0(y1 - y0 + 2 * pad)}"><rect x="${f0(x0 - pad)}" y="${f0(y0 - pad)}" width="${f0(x1 - x0 + 2 * pad)}" height="${f0(y1 - y0 + 2 * pad)}" fill="${th.sky}"/>${panelsMarkup(simple ? parts.map((pt) => ({ ...pt, etch: [] })) : parts, cam, { mode: mode === 'setout' ? 'day' : mode, palette, mat, backlit })}</svg>`;
 }

@@ -16,6 +16,7 @@ export function stageJob(stage) {
       points: p.points.map(([x, y]) => [x / Q, y / Q]),
       holes: p.holes.map((h) => ({ x: h.x / Q, y: h.y / Q, r: h.r / Q })),
       cuts: (p.cuts || []).map((c) => c.map(([x, y]) => [x / Q, y / Q])),
+      etch: (p.etch || []).map((c) => c.map(([x, y]) => [x / Q, y / Q])),
       label: [p.label[0] / Q, p.label[1] / Q],
       minWidth: p.minWidth / Q,
       spots: [],
@@ -40,7 +41,7 @@ export function stageJob(stage) {
   return {
     inner: up(job.inner),
     cut: up(job.cut),
-    engrave: { arcs: [], polys: [], dots: [] },
+    engrave: { arcs: [], polys: job.engrave.polys.map((poly) => poly.map(([x, y]) => [x * Q, y * Q])), dots: [] },
     labels: job.labels.map((l) => ({ ...l, x: l.x * Q, y: l.y * Q, size: l.size * Q })),
     guides: job.guides.map((g) => ({ ...g, x: g.x * Q, y: g.y * Q, w: g.w * Q, h: g.h * Q })),
     bounds: { x: job.bounds.x * Q, y: job.bounds.y * Q, w: job.bounds.w * Q, h: job.bounds.h * Q },

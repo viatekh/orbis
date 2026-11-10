@@ -157,17 +157,18 @@
     <aside class="col design-col" aria-label="Stage design">
       <div class="col-head"><h2>Stage</h2><span class="file" id="stageName"></span></div>
       <div class="preset-row"><select id="st-preset" aria-label="Stage preset"></select></div>
-      <div class="source">
-        <div class="source-view" id="sourceCell" title="The origin cell: every lattice panel is spawned from this"></div>
-        <div class="source-view" id="sourcePetal" title="The origin petal"></div>
-      </div>
-      <p class="note">Source pieces. Change them below and every instance on the stage follows.</p>
       <div class="fields">
         <label class="f"><span>Tiling</span><select id="st-tiling"></select></label>
-        <label class="f"><span>Module</span><select id="st-module"></select></label>
-        <label class="f"><span>Fretwork</span><select id="st-motif"></select></label>
-        <label class="f"><span>Core</span><select id="st-centre"></select></label>
-        <label class="f wide"><span>Form</span><select id="st-form"></select></label>
+        <label class="f"><span>Form</span><select id="st-form"></select></label>
+      </div>
+      <div class="sub source-editor">
+        <h3>Source pieces</h3>
+        <div class="seg small" id="srcTabs" role="group" aria-label="Source piece">
+          <button data-src="cell">Cell</button><button data-src="petal">Petal</button><button data-src="spike">Spike</button><button data-src="core">Core</button>
+        </div>
+        <div class="source-view" id="sourceView"></div>
+        <p class="note" id="srcNote"></p>
+        <div id="srcGalleries"></div>
       </div>
       <div class="checks-row">
         <label class="check"><input type="checkbox" id="st-mirror" /> Mirror</label>
@@ -185,11 +186,12 @@
           <div class="seg small" id="stageModeSeg" role="group" aria-label="View"></div>
           <select id="st-palette" aria-label="LED colour"></select>
           <div class="seg small" id="stageViewSeg" role="group" aria-label="Camera"><button data-cam="front">Front</button><button data-cam="orbit">3D</button></div>
+          <div class="seg small" id="stageZoomSeg" role="group" aria-label="Zoom"><button data-zoom="out" aria-label="Zoom out">−</button><button data-zoom="fit" title="Reset zoom">Fit</button><button data-zoom="in" aria-label="Zoom in">+</button></div>
         </div>
       </div>
       <div class="vars-head"><h2>Variations</h2><button id="btnStageShuffle" class="ghost" title="New variations">Shuffle</button></div>
       <div class="variations" id="stageVariations"></div>
-      <p class="note">To scale; figures are 1.75 m. Drag to orbit. Every panel is sized to cut from one sheet; cells too big for a sheet are subdivided automatically.</p>
+      <p class="note">To scale; figures are 1.75 m. Drag to orbit, scroll or pinch to zoom, Shift-drag to pan. Every panel is sized to cut from one sheet; cells too big for a sheet are subdivided automatically.</p>
     </section>
 
     <aside class="col make-col" aria-label="Make stage" id="stageMake">

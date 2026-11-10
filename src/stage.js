@@ -19,6 +19,10 @@ export const TILINGS = { hex: 'Hex', diamond: 'Diamond', shard: 'Shard', brick: 
 export const MODULES = { stepped: 'Stepped', pyramid: 'Folded', scales: 'Scales', flat: 'Flat' };
 export const MOTIFS = { mixed: 'Mixed', window: 'Window', slots: 'Nested slots', fan: 'Fan', rays: 'Slat fan', louvre: 'Louvre', perf: 'Perforated', solid: 'Solid' };
 export const CENTRES = { disc: 'Ring disc', iris: 'Iris', star: 'Star', rosette: 'Rosette', opening: 'Void', none: 'No core' };
+export const PETAL_SHAPES = { leaf: 'Leaf', eye: 'Eye', teardrop: 'Teardrop', diamond: 'Diamond', blade: 'Blade' };
+const INHERIT = { inherit: 'Same as cell' };
+export const PIECE_MODULES = { ...INHERIT, ...MODULES };
+export const PIECE_MOTIFS = { ...INHERIT, ...MOTIFS };
 export const FORMS = { flat: 'Flat', dome: 'Dome', barrel: 'Barrel', cone: 'Cone', ripple: 'Ripple' };
 export const PRINT_SETS = { none: 'Nothing', fit: 'Everything that fits', core: 'Core', petal: 'Petals', spike: 'Spikes' };
 export const STAGE_MATERIALS = ['birch', 'mdf', 'hdpe', 'aluminium'];
@@ -77,6 +81,7 @@ export const STAGE_PARAMS = [
   { key: 'steps', label: 'Steps', group: 'fret', min: 1, max: 4, step: 1, def: 2, rand: [1, 3] },
   { key: 'detail', label: 'Detail', group: 'fret', min: 0, max: 1, step: 0.01, def: 0.6, rand: [0.3, 1] },
   { key: 'rim', label: 'Rim Width (mm)', group: 'fret', min: 30, max: 200, step: 5, def: 60, rand: [45, 100] },
+  { key: 'etch', label: 'Etch Lines', group: 'fret', min: 0, max: 3, step: 1, def: 1, rand: [0, 3] },
   { key: 'overlay', label: 'Raised Islands', group: 'fret', min: 0, max: 1, step: 0.01, def: 0.4, rand: [0, 0.8] },
 
   { key: 'boothWidth', label: 'Booth Width (m)', group: 'booth', min: 0, max: 6, step: 0.1, def: 3, rand: [2, 4] },
@@ -84,7 +89,12 @@ export const STAGE_PARAMS = [
 ];
 export const STAGE_PARAM_MAP = Object.fromEntries(STAGE_PARAMS.map((p) => [p.key, p]));
 
-const CHOICES = { tiling: TILINGS, module: MODULES, motif: MOTIFS, centre: CENTRES, form: FORMS };
+const CHOICES = {
+  tiling: TILINGS, module: MODULES, motif: MOTIFS, centre: CENTRES, form: FORMS, petalShape: PETAL_SHAPES,
+  coreModule: PIECE_MODULES, coreMotif: PIECE_MOTIFS, spikeModule: PIECE_MODULES, spikeMotif: PIECE_MOTIFS, petalMotif: PIECE_MOTIFS,
+};
+// Each piece can follow the lattice cell or carry its own module and fretwork.
+const own = (p, piece, kind) => (p[`${piece}${kind}`] && p[`${piece}${kind}`] !== 'inherit' ? p[`${piece}${kind}`] : p[kind.toLowerCase()]);
 const FLAGS = ['mirror', 'truss', 'backlit'];
 
 export const STAGE_DEFAULTS = {
@@ -94,6 +104,12 @@ export const STAGE_DEFAULTS = {
   motif: 'mixed',
   centre: 'disc',
   form: 'flat',
+  petalShape: 'leaf',
+  coreModule: 'inherit',
+  coreMotif: 'inherit',
+  spikeModule: 'inherit',
+  spikeMotif: 'inherit',
+  petalMotif: 'inherit',
   mirror: true,
   truss: true,
   backlit: true,
@@ -439,8 +455,17 @@ function labelSpot(P, cuts, holes, rim) {
   return best.pt;
 }
 
+// Etch-only detail: score lines that follow the outline inside the rim, so they never cross a cut.
+let ETCH_LINES = 0;
 function panel(P, fret, extra) {
-  return { points: P, holes: fret.holes, cuts: fret.cuts, label: labelSpot(P, fret.cuts, fret.holes, extra.rim), ...extra };
+  const etch = [];
+  if (ETCH_LINES && extra.rim >= 36 && !extra.plain) {
+    for (let k = 1; k <= ETCH_LINES; k++) {
+      const line = insetConvex(P, (extra.rim * k) / (ETCH_LINES + 1));
+      if (line) etch.push(line);
+    }
+  }
+  return { points: P, holes: fret.holes, cuts: fret.cuts, etch, label: labelSpot(P, fret.cuts, fret.holes, extra.rim), ...extra };
 }
 
 // ------------------------------------------------------------------ modules
@@ -640,12 +665,26 @@ function buildFacade(p, ctx, holes) {
 
 // One petal in its own frame: base at the origin, tip along +x. Both sides are
 // concave curves, so the outline is convex however lopsided the flame gets.
-function petalShape(len, width, asym) {
+// Half-width profiles along the petal (0 = base, 1 = tip). All are concave, so every petal is convex.
+const PROFILES = {
+  leaf: (t) => Math.sin(Math.PI * t) ** 0.85,
+  eye: (t) => 4 * t * (1 - t),
+  teardrop: (t) => (Math.sqrt(t) * (1 - t)) / 0.3849,
+  diamond: (t) => (t < 0.35 ? t / 0.35 : (1 - t) / 0.65),
+  blade: (t) => Math.min(1, t / 0.08) * (1 - t) ** 0.6,
+};
+function petalShape(len, width, asym, kind = 'leaf') {
   const n = 12;
-  const side = (k) => Array.from({ length: n + 1 }, (_, i) => [(i / n) * len, k * Math.sin((Math.PI * i) / n) ** 0.85]);
+  const f = PROFILES[kind] || PROFILES.leaf;
+  const ts = Array.from({ length: n + 1 }, (_, i) => i / n);
+  if (kind === 'diamond') ts.splice(5, 0, 0.35);
+  if (kind === 'blade') ts.splice(1, 0, 0.08);
+  ts.sort((x, y) => x - y);
+  const side = (k) => ts.map((t) => [t * len, k * f(t)]);
   const up = side((width / 2) * (1 + asym));
   const down = side((-width / 2) * (1 - asym)).reverse();
-  return [...up, ...down.slice(1, -1)];
+  const pts = [...up, ...down.slice(1, -1)];
+  return pts.filter((q, i) => Math.hypot(q[0] - pts[(i + 1) % pts.length][0], q[1] - pts[(i + 1) % pts.length][1]) > 1);
 }
 
 // A petal's stacked layers, flat and unplaced (used by the ring and the source preview).
@@ -663,8 +702,11 @@ function petalLayers(P, p, ctx, t) {
       const [x, y] = centroid(poly);
       const r = pin * 0.5;
       if (r >= ctx.fret.minHoleR) fret.holes.push({ x, y, r, kind: 'bubble' }); // the eye
-    } else if (p.motif !== 'solid') {
-      fret = fretwork(poly, 'slots', { ...ctx.fret, rim: Math.min(ctx.fret.rim, 45), detail: 0, ang: 0, parity: 0, reserve: inr * 0.3 + ctx.web });
+    } else {
+      const motif = p.petalMotif === 'inherit' ? (p.motif === 'solid' ? 'solid' : 'slots') : p.petalMotif === 'mixed' ? 'rays' : p.petalMotif;
+      // nested slots hug the outline under the next layer; other motifs use the whole face
+      if (motif === 'slots') fret = fretwork(poly, 'slots', { ...ctx.fret, rim: Math.min(ctx.fret.rim, 45), detail: 0, ang: 0, parity: 0, reserve: inr * 0.3 + ctx.web });
+      else fret = fretwork(poly, motif, { ...ctx.fret, rim: Math.min(ctx.fret.rim, 45), ang: Math.PI / 2, parity: 1, spin: 0, reserve: 0 });
     }
     out.push({ ...panel(poly, fret, { t: clamp(t + k * 0.25, 0, 1), el: 'petal', rim: Math.min(45, pin * 0.4), minWidth: ctx.web, layer: k }), z: k });
   }
@@ -688,7 +730,7 @@ function buildPetals(p, ctx) {
     const base = [r0 * Math.sin(th), -cy - r0 * Math.cos(th)];
     const c = Math.cos(phi);
     const s = Math.sin(phi);
-    const raw = petalShape(len, width, axis ? 0 : p.petalAsym).map(([x, y]) => [base[0] + x * c - y * s, base[1] + x * s + y * c]);
+    const raw = petalShape(len, width, axis ? 0 : p.petalAsym, p.petalShape).map(([x, y]) => [base[0] + x * c - y * s, base[1] + x * s + y * c]);
     const P = clipHalf(raw, 0, 1, -(deckH + 30));
     if (P.length < 3 || area(P) < 0.6 * area(raw)) continue;
     for (const layer of petalLayers(P, p, ctx, 0.35)) {
@@ -714,6 +756,7 @@ function buildDisc(discParams, seedShift, D, cx, cy, z0, step, ctx) {
     points: pt.points.map(([x, y]) => [x * k + cx, y * k - cy]),
     holes: pt.holes.map((h) => ({ ...h, x: h.x * k + cx, y: h.y * k - cy, r: h.r * k })),
     cuts: [],
+    etch: [],
     label: [pt.label[0] * k + cx, pt.label[1] * k - cy],
     minWidth: pt.minWidth * k,
     t: pt.t,
@@ -764,7 +807,7 @@ function buildCore(type, p, ctx, D, cx, cy, z0, discParams, seedShift) {
       const c = centroid(poly);
       parts.push(
         ...modulePanels(poly, {
-          module: p.module, motif: p.motif === 'mixed' ? MIX[(cell.ring + shift) % MIX.length] : p.motif, depth: p.depth * 0.7, steps: p.steps,
+          module: own(p, 'core', 'Module'), motif: own(p, 'core', 'Motif') === 'mixed' ? MIX[(cell.ring + shift) % MIX.length] : own(p, 'core', 'Motif'), depth: p.depth * 0.7, steps: p.steps,
           overlay: p.overlay, overlayRoll: 0.5, z0: z0 + cell.ring * p.discStep, t: clamp(0.25 + cell.ring * 0.35, 0, 1), el: 'core',
           origin: [cx, -cy], parity: cell.ring % 2, opts: { ...ctx.fret, ang: Math.atan2(c[1] + cy, c[0] - cx), parity: cell.ring % 2, reserve: 0 },
         }),
@@ -795,7 +838,7 @@ function buildSpikes(p, ctx) {
     const P = clipHalf(raw, 0, 1, -(deckH + 30));
     if (P.length < 3 || area(P) < 0.6 * area(raw)) continue;
     const made = modulePanels(P, {
-      module: p.module === 'scales' ? 'flat' : p.module, motif: p.motif === 'mixed' ? 'louvre' : p.motif, depth: p.depth * 0.6, steps: 1, overlay: 0, overlayRoll: 1,
+      module: own(p, 'spike', 'Module') === 'scales' ? 'flat' : own(p, 'spike', 'Module'), motif: own(p, 'spike', 'Motif') === 'mixed' ? 'louvre' : own(p, 'spike', 'Motif'), depth: p.depth * 0.6, steps: 1, overlay: 0, overlayRoll: 1,
       z0: -60, t: 0.9, el: 'spike', lift: ctx.lift, origin: [0, -cy], opts: { ...ctx.fret, ang: Math.atan2(dir[1], dir[0]), parity: 1, reserve: 0 },
     });
     parts.push(...made);
@@ -835,24 +878,44 @@ function context(p, fab) {
 }
 
 // The origin pieces every instance is spawned from, laid flat for the editor preview.
-export function sourcePanels(input, fabInput = {}) {
+export function sourcePanels(input, fabInput = {}, only = null) {
   const p = normalizeStage(input);
   const ctx = context(p, normalizeStageFab(fabInput));
-  const HEX = [0, 1, 2, 3, 4, 5].map((i) => [520 * Math.sin((i * Math.PI) / 3), -520 * Math.cos((i * Math.PI) / 3)]);
-  const shape = { hex: HEX, diamond: [[0, -640], [420, 0], [0, 640], [-420, 0]], shard: [[0, -560], [500, 320], [-500, 320]], brick: [[-560, -360], [560, -360], [560, 360], [-560, 360]] }[p.tiling] || HEX;
-  const cell = modulePanels(shape, {
-    module: p.module, motif: p.motif === 'mixed' ? MIX[p.seed % MIX.length] : p.motif, depth: p.depth, steps: p.steps,
-    overlay: p.overlay, overlayRoll: 0.5, z0: 0, t: 0.5, el: 'facade', opts: { ...ctx.fret, ang: Math.PI / 2, parity: 0, reserve: 0 },
-  });
-  const len = Math.min(p.petalLength * M, ctx.L);
-  const up = petalShape(len, Math.min(p.petalWidth * M, ctx.S), p.petalAsym).map(([x, y]) => [y, len / 2 - x]);
-  const step = Math.max(40, Math.abs(p.depth) * 0.35);
-  const petal = p.petals ? petalLayers(up, p, ctx, 0.35).map(({ z, ...rest }) => ({ ...rest, frame: flatFrame(z * step) })) : [];
-  return { cell, petal };
+  ETCH_LINES = p.etch;
+  const want = (k) => !only || only === k;
+  const out = { cell: [], petal: [], spike: [], core: [] };
+  const opts = { ...ctx.fret, ang: Math.PI / 2, parity: 0, reserve: 0 };
+  if (want('cell')) {
+    const HEX = [0, 1, 2, 3, 4, 5].map((i) => [520 * Math.sin((i * Math.PI) / 3), -520 * Math.cos((i * Math.PI) / 3)]);
+    const shape = { hex: HEX, diamond: [[0, -640], [420, 0], [0, 640], [-420, 0]], shard: [[0, -560], [500, 320], [-500, 320]], brick: [[-560, -360], [560, -360], [560, 360], [-560, 360]] }[p.tiling] || HEX;
+    out.cell = modulePanels(shape, {
+      module: p.module, motif: p.motif === 'mixed' ? MIX[p.seed % MIX.length] : p.motif, depth: p.depth, steps: p.steps,
+      overlay: p.overlay, overlayRoll: 0.5, z0: 0, t: 0.5, el: 'facade', origin: [0, 2000], opts,
+    });
+  }
+  if (want('petal')) {
+    const len = Math.min(p.petalLength * M, ctx.L);
+    const up = petalShape(len, Math.min(p.petalWidth * M, ctx.S), p.petalAsym, p.petalShape).map(([x, y]) => [y, len / 2 - x]);
+    const step = Math.max(40, Math.abs(p.depth) * 0.35);
+    out.petal = petalLayers(up, p, ctx, 0.35).map(({ z, ...rest }) => ({ ...rest, frame: flatFrame(z * step) }));
+  }
+  if (want('spike')) {
+    const len = Math.min(p.spikeLength * M, ctx.L);
+    const w = Math.min(p.spikeWidth * M, ctx.S);
+    const module = own(p, 'spike', 'Module');
+    const motif = own(p, 'spike', 'Motif');
+    out.spike = modulePanels([[0, len / 2], [w / 2, len * 0.2], [0, -len / 2], [-w / 2, len * 0.2]], {
+      module: module === 'scales' ? 'flat' : module, motif: motif === 'mixed' ? 'louvre' : motif, depth: p.depth * 0.6, steps: 1,
+      overlay: 0, overlayRoll: 1, z0: 0, t: 0.9, el: 'spike', opts: { ...opts, parity: 1 },
+    });
+  }
+  if (want('core') && ctx.hasCore) out.core = buildCore(p.centre, p, { ...ctx, lift: FLAT_LIFT }, 1800, 0, 0, 0, DEFAULTS, 0).parts;
+  return out;
 }
 
 export function generateStage(input, discParams = DEFAULTS, fabInput = {}) {
   const p = normalizeStage(input);
+  ETCH_LINES = p.etch;
   const fab = normalizeStageFab(fabInput);
   const ctx = context(p, fab);
   const { L, S, W, deckH, D, cy, web } = ctx;

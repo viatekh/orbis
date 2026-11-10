@@ -6,7 +6,7 @@ import { MATERIALS } from './fabrication.js';
 import { jobSVG, jobDXF } from './export.js';
 import { zip } from './zip.js';
 import {
-  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, TILINGS, MODULES, MOTIFS, CENTRES, FORMS, PRINT_SETS, STAGE_MATERIALS,
+  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, TILINGS, MODULES, MOTIFS, CENTRES, FORMS, PRINT_SETS, PETAL_SHAPES, PIECE_MODULES, PIECE_MOTIFS, STAGE_MATERIALS,
   normalizeStage, normalizeStageFab, generateStage, sourcePanels,
 } from './stage.js';
 import { stageJob, checkStage, settingOutCSV, printFiles } from './stagefab.js';
@@ -43,6 +43,8 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     stage: null,
     job: null,
     cam: { yaw: 0, pitch: 0 },
+    view: null, // zoomed viewBox, or null for the whole stage
+    src: 'cell',
   };
   const inputs = {};
 
@@ -84,7 +86,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     }
     host.appendChild(det);
   }
-  const SELECTS = { tiling: TILINGS, module: MODULES, motif: MOTIFS, centre: CENTRES, form: FORMS };
+  const SELECTS = { tiling: TILINGS, form: FORMS };
   const CHECKS = ['mirror', 'backlit', 'truss'];
   for (const [key, set] of Object.entries(SELECTS)) {
     $(`#st-${key}`).innerHTML = Object.entries(set).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
@@ -175,7 +177,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
   // ------------------------------------------------------------ render
   const fileBase = () => `orbis-stage-s${state.params.seed}-${state.params.width}m-${state.params.tiling}`;
   const look = () => ({ palette: state.palette, material: MATERIALS[state.fab.material] });
-  const elevation = (mode = state.mode, cam = state.cam, draft = false) => elevationSVG(state.stage, { mode, ...look(), ...cam, draft });
+  const elevation = (mode = state.mode, cam = state.cam, draft = false, view = null) => elevationSVG(state.stage, { mode, ...look(), ...cam, draft, view });
   const FRONT = { yaw: 0, pitch: 0 };
   let makeTimer;
 
@@ -185,10 +187,8 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     write(KEY, { params: state.params, fab: state.fab, mode: state.mode, palette: state.palette });
     state.stage = generateStage(state.params, getDisc(), state.fab);
     state.job = null;
-    $('#elevation').innerHTML = elevation();
-    const src = sourcePanels(state.params, state.fab);
-    $('#sourceCell').innerHTML = sourceSVG(src.cell, { mode: state.mode, ...look(), backlit: state.params.backlit });
-    $('#sourcePetal').innerHTML = sourceSVG(src.petal, { mode: state.mode, ...look(), backlit: state.params.backlit });
+    $('#elevation').innerHTML = elevation(state.mode, state.cam, false, state.view);
+    renderSource();
     const box = elevationBox(state.stage);
     const frame = $('#elevation').parentElement;
     frame.style.aspectRatio = `${Math.round(box.w)} / ${Math.round(box.h)}`;
@@ -228,6 +228,101 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     $('#stagePreview').innerHTML = jobSVG(job, '', { preview: true });
     $('#stageMake').classList.remove('stale');
   }
+
+  // ------------------------------------------------------------ source pieces
+  // Each piece has its own options; the galleries show what every option does to that piece.
+  const PIECES = {
+    cell: { note: 'The lattice cell. Every panel in the lattice is spawned from it.', galleries: [['module', 'Module', MODULES], ['motif', 'Fretwork', MOTIFS]] },
+    petal: { note: 'One petal; the ring repeats it. Length, width, lean and layers are under Petal Ring.', galleries: [['petalShape', 'Shape', PETAL_SHAPES], ['petalMotif', 'Fretwork', PIECE_MOTIFS]] },
+    spike: { note: 'One spike. Set how many under Spikes.', galleries: [['spikeModule', 'Module', PIECE_MODULES], ['spikeMotif', 'Fretwork', PIECE_MOTIFS]] },
+    core: { note: 'The centre piece; side medallions copy it.', galleries: [['centre', 'Core', CENTRES], ['coreModule', 'Module', PIECE_MODULES], ['coreMotif', 'Fretwork', PIECE_MOTIFS]] },
+  };
+  const srcLook = () => ({ mode: state.mode, ...look(), backlit: state.params.backlit });
+  let galleryTimer;
+  function renderSource() {
+    const piece = PIECES[state.src];
+    document.querySelectorAll('#srcTabs button').forEach((b) => b.classList.toggle('on', b.dataset.src === state.src));
+    const parts = sourcePanels(state.params, state.fab, state.src)[state.src];
+    const off = (state.src === 'petal' && !state.params.petals) || (state.src === 'spike' && !state.params.spikes);
+    $('#sourceView').innerHTML = sourceSVG(parts, srcLook());
+    $('#srcNote').textContent = off ? `${piece.note} None are on the stage yet.` : parts.length ? piece.note : 'No core: the stage has a void or nothing at its centre.';
+    clearTimeout(galleryTimer);
+    galleryTimer = setTimeout(renderGalleries, 250);
+  }
+  function renderGalleries() {
+    const host = $('#srcGalleries');
+    host.innerHTML = '';
+    for (const [key, title, options] of PIECES[state.src].galleries) {
+      const head = document.createElement('div');
+      head.className = 'gallery-head';
+      head.textContent = title;
+      const grid = document.createElement('div');
+      grid.className = 'gallery';
+      for (const [value, label] of Object.entries(options)) {
+        const b = document.createElement('button');
+        b.title = label;
+        b.classList.toggle('on', state.params[key] === value);
+        const parts = sourcePanels({ ...state.params, [key]: value }, state.fab, state.src)[state.src];
+        if (parts.length) b.innerHTML = `${sourceSVG(parts, { ...srcLook(), simple: true })}<span>${label}</span>`;
+        else {
+          b.className += ' text';
+          b.innerHTML = `<span>${label}</span>`;
+        }
+        b.addEventListener('click', () => setParam(key, value));
+        grid.appendChild(b);
+      }
+      host.append(head, grid);
+    }
+  }
+  $('#srcTabs').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    state.src = b.dataset.src;
+    renderSource();
+  });
+
+  // ------------------------------------------------------------ zoom and pan
+  // Zooming only moves the SVG's viewBox, so it costs nothing to redraw.
+  const applyView = () => {
+    const svg = $('#elevation svg');
+    const v = state.view || elevationBox(state.stage);
+    if (svg) svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
+  };
+  function zoomBy(factor, clientX = null, clientY = null) {
+    if (!state.stage) return;
+    const full = elevationBox(state.stage);
+    const v = state.view || full;
+    const rect = $('#elevation').getBoundingClientRect();
+    const fx = clientX === null ? 0.5 : (clientX - rect.left) / rect.width;
+    const fy = clientY === null ? 0.5 : (clientY - rect.top) / rect.height;
+    const w = Math.min(full.w, Math.max(full.w / 16, v.w / factor));
+    const h = (w * full.h) / full.w;
+    const x = Math.min(full.x + full.w - w, Math.max(full.x, v.x + fx * (v.w - w)));
+    const y = Math.min(full.y + full.h - h, Math.max(full.y, v.y + fy * (v.h - h)));
+    state.view = w >= full.w * 0.999 ? null : { x, y, w, h };
+    applyView();
+  }
+  function panBy(dx, dy) {
+    if (!state.view) return;
+    const full = elevationBox(state.stage);
+    const rect = $('#elevation').getBoundingClientRect();
+    const v = state.view;
+    v.x = Math.min(full.x + full.w - v.w, Math.max(full.x, v.x - (dx / rect.width) * v.w));
+    v.y = Math.min(full.y + full.h - v.h, Math.max(full.y, v.y - (dy / rect.height) * v.h));
+    applyView();
+  }
+  $('#elevation').parentElement.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    zoomBy(Math.exp(-e.deltaY * 0.0016), e.clientX, e.clientY);
+  }, { passive: false });
+  $('#stageZoomSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.zoom === 'fit') {
+      state.view = null;
+      applyView();
+    } else zoomBy(b.dataset.zoom === 'in' ? 1.5 : 1 / 1.5);
+  });
 
   // ------------------------------------------------------------ variations
   const pickKey = (set, skip = []) => {
@@ -276,19 +371,43 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
   let drag = null;
   let pending = false;
   const redraw = (draft) => {
-    if (state.stage) $('#elevation').innerHTML = elevation(state.mode, state.cam, draft);
+    if (state.stage) $('#elevation').innerHTML = elevation(state.mode, state.cam, draft, state.view);
   };
+  const touches = new Map();
+  let pinch = 0;
   frame.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('.hud') || state.mode === 'setout') return;
-    drag = { x: e.clientX, y: e.clientY, ...state.cam, moved: false };
+    if (e.target.closest('.hud')) return;
+    touches.set(e.pointerId, [e.clientX, e.clientY]);
+    if (touches.size === 2) {
+      const [a, b] = [...touches.values()];
+      pinch = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      drag = null;
+      return;
+    }
+    const pan = e.shiftKey || e.button === 1 || state.mode === 'setout';
+    drag = { x: e.clientX, y: e.clientY, ...state.cam, moved: false, pan };
   });
   window.addEventListener('pointermove', (e) => {
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, [e.clientX, e.clientY]);
+    if (touches.size === 2 && pinch) {
+      const [a, b] = [...touches.values()];
+      const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      zoomBy(d / pinch, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+      pinch = d;
+      return;
+    }
     if (!drag) return;
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
     if (!drag.moved && Math.hypot(dx, dy) < 6) return;
     drag.moved = true;
     frame.classList.add('dragging');
+    if (drag.pan) {
+      panBy(dx, dy);
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+      return;
+    }
     state.cam = { yaw: Math.max(-80, Math.min(80, drag.yaw + dx * 0.3)), pitch: Math.max(-10, Math.min(65, drag.pitch + dy * 0.25)) };
     if (pending) return;
     pending = true;
@@ -297,16 +416,20 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
       if (drag) redraw(true); // outlines only while moving
     });
   });
-  window.addEventListener('pointerup', () => {
+  const release = (e) => {
+    touches.delete(e.pointerId);
+    if (touches.size < 2) pinch = 0;
     if (!drag) return;
-    const moved = drag.moved;
+    const { moved, pan } = drag;
     drag = null;
     frame.classList.remove('dragging');
-    if (moved) {
+    if (moved && !pan) {
       redraw(false);
       sync();
     }
-  });
+  };
+  window.addEventListener('pointerup', release);
+  window.addEventListener('pointercancel', release);
   $('#stageViewSeg').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -360,7 +483,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
       case 'dxf':
         return saveZipped(`${base}-cut-sheets.dxf`, jobDXF(job), 'application/dxf');
       case 'elevation':
-        return saveFile(`${base}-${state.mode}.svg`, elevation(), 'image/svg+xml');
+        return saveFile(`${base}-${state.mode}.svg`, elevation(state.mode, state.cam, false, state.view), 'image/svg+xml');
       case 'stl': {
         const files = printFiles(state.stage);
         if (!files.length) return toast('Nothing is set to print: choose what to print under 3D print');
