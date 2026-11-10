@@ -398,7 +398,7 @@ function packSheets(design, fab, k, job, labelSize) {
 
   const sheets = [];
   const newSheet = () => {
-    const sheet = { w: W, h: H, sky: new Float64Array(W + 2 * gap).fill(margin - gap), items: [] };
+    const sheet = { w: W, h: H, sky: new Float64Array(W + 2 * gap).fill(margin - gap), items: [], fill: 0 };
     sheets.push(sheet);
     return sheet;
   };
@@ -424,7 +424,9 @@ function packSheets(design, fab, k, job, labelSize) {
       continue;
     }
     let placed = null;
-    for (const sheet of sheets) {
+    // big jobs: try the emptiest and the newest sheets, not every sheet
+    const open = sheets.length <= 14 ? sheets : [...new Set([...sheets.filter((sh) => !sh.oversize).sort((u, v) => u.fill - v.fill).slice(0, 10), ...sheets.slice(-4)])];
+    for (const sheet of open) {
       if (sheet.oversize) continue;
       for (const o of it.options) {
         const d = drop(sheet, o);
@@ -440,6 +442,7 @@ function packSheets(design, fab, k, job, labelSize) {
     for (let c = 0; c < o.hi.length; c++) {
       if (o.hi[c] !== -Infinity) sheet.sky[d.x + c] = Math.max(sheet.sky[d.x + c], d.y + o.hi[c]);
     }
+    sheet.fill += o.b.w * o.b.h;
     sheet.items.push({ it, o, x: d.x, y: d.y });
   }
 

@@ -2,6 +2,7 @@
 // nested CNC sheets, checks, and a setting-out list.
 
 import { buildJob } from './fabrication.js';
+import { world } from './stage.js';
 
 // Nesting runs on a 5 mm grid: full-size sheets at 1 mm would be needlessly slow.
 const Q = 5;
@@ -62,29 +63,30 @@ export function checkStage(stage, job) {
   const small = holes.filter((h) => h.r * 2 < fab.tool * 1.1).length;
   if (small) add('fail', `${small} round cutouts are smaller than the ${fab.tool} mm bit — use a smaller bit or a larger disc.`);
   else add('ok', `${stats.cutouts} cutouts clear the ${fab.tool} mm bit; inside corners get ${fmt(fab.tool / 2)} mm radii.`);
-  if (stats.raised) add('info', `${stats.raised} raised panels stand off the lattice — allow spacers and fixings for each.`);
+  if (stats.raised) add('info', `${stats.raised} panels stand off the back plane, up to ${Math.round(stats.reliefMm)} mm of relief — the setting-out list gives each stand-off for spacers.`);
+  if (stats.tilted) add('info', `${stats.tilted} tilted faces meet at ridges: bevel the edges or join them with brackets.`);
+  if (stats.diffuserM2 > 0.05) add('info', `Backlighting needs about ${fmt(stats.diffuserM2)} m² of diffuser behind the cutouts.`);
 
   const thinnest = stage.parts.reduce((m, pt) => Math.min(m, pt.minWidth), Infinity);
-  const fragile = Math.max(30, fab.thickness * 2.5);
+  const fragile = Math.max(20, fab.thickness * 2);
   if (thinnest < fragile) add('warn', `Thinnest panel section is ${fmt(thinnest)} mm — fragile in ${fab.thickness} mm sheet. Use thicker sheet, a wider Rim, or raise Band Fill on the disc.`);
   else add('ok', `Thinnest panel section ${fmt(thinnest)} mm.`);
 
-  const discTop = p.deckHeight + p.lift + p.discDiameter;
-  if (p.boothWidth >= 0.5 && p.lift < p.boothHeight) add('info', `The booth covers the bottom ${fmt((p.boothHeight - p.lift) * 100)} cm of the disc.`);
   if (stage.truss) add('info', `Goalpost shown at ${fmt(stage.truss.w / 1000)} m span × ${fmt(stage.truss.h / 1000)} m — indicative only.`);
-  add('info', `${fmt(stats.areaM2)} m² of facade up to ${fmt(Math.max(discTop, stats.heightM))} m acts as a sail. Structure, fixings and wind loading need sign-off by a qualified engineer.`);
+  add('info', `${fmt(stats.areaM2)} m² of facade up to ${fmt(stats.heightM)} m acts as a sail. Structure, fixings and wind loading need sign-off by a qualified engineer.`);
   return out;
 }
 
-// One row per panel: where its centre sits relative to the stage centreline and the ground.
+// One row per panel: where it sits relative to the stage centreline, the ground and the back plane.
 export function settingOutCSV(stage) {
-  const rows = ['panel,element,centre_x_mm,centre_height_mm,width_mm,height_mm,cutouts'];
+  const rows = ['panel,element,centre_x_mm,centre_height_mm,standoff_mm,width_mm,height_mm,tilted,cutouts'];
   for (const pt of stage.parts) {
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (const [x, y] of pt.points) {
-      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
-    }
-    rows.push([pt.id, pt.el, Math.round((x0 + x1) / 2), Math.round(-(y0 + y1) / 2), Math.round(x1 - x0), Math.round(y1 - y0), pt.holes.length].join(','));
+    const w = pt.points.map((q) => world(pt, q));
+    const span = (i) => [Math.min(...w.map((q) => q[i])), Math.max(...w.map((q) => q[i]))];
+    const [x0, x1] = span(0);
+    const [y0, y1] = span(1);
+    const [z0, z1] = span(2);
+    rows.push([pt.id, pt.el, Math.round((x0 + x1) / 2), Math.round(-(y0 + y1) / 2), Math.round((z0 + z1) / 2), Math.round(x1 - x0), Math.round(y1 - y0), pt.tilted ? 'yes' : 'no', pt.holes.length + pt.cuts.length].join(','));
   }
   return rows.join('\n') + '\n';
 }

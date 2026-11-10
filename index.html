@@ -156,15 +156,23 @@
   <main class="work stage-only" id="stageWork">
     <aside class="col design-col" aria-label="Stage design">
       <div class="col-head"><h2>Stage</h2><span class="file" id="stageName"></span></div>
+      <div class="source">
+        <div class="source-view" id="sourceCell" title="The origin cell: every lattice panel is spawned from this"></div>
+        <div class="source-view" id="sourcePetal" title="The origin petal"></div>
+      </div>
+      <p class="note">Source pieces. Change them below and every instance on the stage follows.</p>
       <div class="fields">
         <label class="f"><span>Tiling</span><select id="st-tiling"></select></label>
+        <label class="f"><span>Module</span><select id="st-module"></select></label>
         <label class="f"><span>Fretwork</span><select id="st-motif"></select></label>
+        <label class="f"><span>Centre</span><select id="st-centre"></select></label>
       </div>
       <div class="checks-row">
         <label class="check"><input type="checkbox" id="st-mirror" /> Mirror</label>
-        <label class="check"><input type="checkbox" id="st-truss" /> Show truss</label>
+        <label class="check"><input type="checkbox" id="st-backlit" /> Backlit</label>
+        <label class="check"><input type="checkbox" id="st-truss" /> Truss</label>
       </div>
-      <button id="btnEditDisc" title="The centrepiece is your current Disc design">Edit centrepiece in Disc →</button>
+      <button id="btnEditDisc" title="Medallions use your current Disc design">Edit medallion design in Disc →</button>
       <div id="stageControls"></div>
     </aside>
 
@@ -174,9 +182,10 @@
         <div class="hud hud-tl stage-hud">
           <div class="seg small" id="stageModeSeg" role="group" aria-label="View"></div>
           <select id="st-palette" aria-label="LED colour"></select>
+          <div class="seg small" id="stageViewSeg" role="group" aria-label="Camera"><button data-cam="front">Front</button><button data-cam="orbit">3D</button></div>
         </div>
       </div>
-      <p class="note">Front elevation, to scale. Figures are 1.75 m. Every panel is sized to cut from one sheet; cells too big for a sheet are subdivided automatically.</p>
+      <p class="note">To scale; figures are 1.75 m. Drag to orbit. Every panel is sized to cut from one sheet; cells too big for a sheet are subdivided automatically.</p>
     </section>
 
     <aside class="col make-col" aria-label="Make stage" id="stageMake">

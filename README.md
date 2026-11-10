@@ -13,13 +13,17 @@ npm test         # geometry + export tests (node --test)
 
 The **Stage** workspace turns the disc into the centrepiece of a festival stage facade, drawn as a to-scale front elevation.
 
-- **Centrepiece**: your current Disc design, scaled to 1–8 m and re-sliced so every ring segment fits one sheet.
-- **Panel lattice**: a mandala of convex panels around the disc — Hex, Diamond, Shard or Brick tilings in polar space, so cells keep their shape as they grow outward. A crown silhouette (height, points, depth, squareness), shadow gaps, edge erosion, and automatic subdivision of any cell too big for a sheet.
-- **Fretwork**: every panel is cut with nested slots, fans, louvres or halftone perforation (or a mix by ring), always leaving a minimum web. A raised layer adds smaller panels stood off the lattice for depth.
+- **Everything is a flat panel placed in 3D.** Each part keeps its flat cut shape plus a position, so panels can stand off the back plane, step forward or back, or tilt into folded forms. Drag the view to orbit.
+- **Source pieces**: one origin cell and one origin petal are shown on their own; every instance on the stage is spawned from them.
+- **Modules**: *Stepped* (nested frames stepping forward, or back for a portal look), *Folded* (each cell becomes a pyramid of tilted faces, cut at true size), or *Flat* with raised islands.
+- **Fretwork**: window (frame for diffuser), nested slots, fan, slat fan, louvre, halftone perforation, or a mix by ring. A minimum web is always kept. *Backlit* lights every cutout.
+- **Centre and medallions**: your Disc design as a layered medallion (ring-by-ring stand-off), optional side medallions, or an open portal instead of a disc.
+- **Petal ring**: convex leaf or flame petals fanned around the centre, in up to three stacked layers with an eye.
+- **Panel lattice**: Hex, Diamond, Shard or Brick tilings in polar space, a crown silhouette, shadow gaps, edge erosion, and automatic subdivision of any cell too big for a sheet.
 - **DJ booth** front, stage deck (2×1 m modules) and an indicative goalpost truss, with 1.75 m figures for scale.
 - **Views**: Night (LED-lit), Day (material) and Setting-out (numbered panels on a 1 m grid).
 - **Make**: sheet size, thickness, bit and material; panels are nested onto sheets with a bill of materials (sheets, CNC time, weight, LED run, deck modules, facade area).
-- **Build kit .zip**: nested cut sheets (SVG + DXF, engraved panel numbers, cutouts before outlines), setting-out drawing and CSV of every panel position, visuals, settings and notes.
+- **Build kit .zip**: nested cut sheets (SVG + DXF, engraved panel numbers, cutouts before outlines), setting-out drawing and CSV of every panel position and stand-off, visuals, settings and notes.
 
 The facade is a wind sail: structure, fixings and wind limits must be designed and signed off by a qualified engineer. The truss shown is indicative only.
 

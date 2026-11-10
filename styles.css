@@ -347,3 +347,12 @@ body[data-mode='stage'] .disc-only, body:not([data-mode='stage']) .stage-only { 
   .elevation .readout { display: none; }
 }
 .job-preview svg * { vector-effect: non-scaling-stroke; }
+.source { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.source-view { aspect-ratio: 1; border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); background: #07090d; }
+.source-view svg { width: 100%; height: 100%; display: block; }
+.elevation { cursor: grab; touch-action: pan-y; }
+.elevation.dragging { cursor: grabbing; }
+#stageViewSeg button { flex: none; }
+.stage-hud .seg { background: rgba(20, 24, 26, 0.82); border-color: rgba(255, 255, 255, 0.16); }
+.stage-hud .seg button { color: #c9d1cd; }
+.stage-hud .seg button.on { color: var(--accent-ink); }

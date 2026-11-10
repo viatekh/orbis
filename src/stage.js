@@ -16,61 +16,81 @@ const EDGE = 40; // sheet margin kept clear on every side
 const DISC_REF = 1000; // the disc is generated at this diameter, then scaled
 
 export const TILINGS = { hex: 'Hex', diamond: 'Diamond', shard: 'Shard', brick: 'Brick', none: 'None' };
-export const MOTIFS = { mixed: 'Mixed', slots: 'Nested slots', fan: 'Fan', louvre: 'Louvre', perf: 'Perforated', solid: 'Solid' };
+export const MODULES = { stepped: 'Stepped', pyramid: 'Folded', flat: 'Flat' };
+export const MOTIFS = { mixed: 'Mixed', window: 'Window', slots: 'Nested slots', fan: 'Fan', rays: 'Slat fan', louvre: 'Louvre', perf: 'Perforated', solid: 'Solid' };
+export const CENTRES = { disc: 'Disc', opening: 'Open portal' };
 export const STAGE_MATERIALS = ['birch', 'mdf', 'hdpe', 'aluminium'];
 
 export const STAGE_GROUPS = [
   { id: 'stage', label: 'Stage' },
-  { id: 'centre', label: 'Centrepiece' },
+  { id: 'centre', label: 'Centre & Medallions' },
+  { id: 'petal', label: 'Petal Ring' },
   { id: 'facade', label: 'Panel Lattice' },
-  { id: 'fret', label: 'Fretwork' },
+  { id: 'fret', label: 'Source Panel' },
   { id: 'booth', label: 'DJ Booth' },
 ];
 
 export const STAGE_PARAMS = [
   { key: 'seed', label: 'Seed', group: 'stage', min: 0, max: 999, step: 1, def: 7, rand: [0, 999] },
-  { key: 'width', label: 'Stage Width (m)', group: 'stage', min: 4, max: 30, step: 0.5, def: 16, rand: [11, 22] },
+  { key: 'width', label: 'Stage Width (m)', group: 'stage', min: 4, max: 30, step: 0.5, def: 18, rand: [13, 22] },
   { key: 'deckHeight', label: 'Deck Height (m)', group: 'stage', min: 0.4, max: 2.4, step: 0.1, def: 1.2, rand: null },
   { key: 'deckDepth', label: 'Deck Depth (m)', group: 'stage', min: 2, max: 12, step: 1, def: 6, rand: null },
   { key: 'chaos', label: 'Randomness', group: 'stage', min: 0, max: 1, step: 0.01, def: 0.35, rand: [0, 0.8] },
 
-  { key: 'discDiameter', label: 'Disc Ø (m)', group: 'centre', min: 1, max: 8, step: 0.1, def: 3.6, rand: [2.5, 5] },
-  { key: 'lift', label: 'Lift Above Deck (m)', group: 'centre', min: 0, max: 4, step: 0.1, def: 1.4, rand: [0.9, 2] },
+  { key: 'discDiameter', label: 'Centre Ø (m)', group: 'centre', min: 1, max: 8, step: 0.1, def: 3.2, rand: [2.4, 4.4] },
+  { key: 'lift', label: 'Lift Above Deck (m)', group: 'centre', min: 0, max: 4, step: 0.1, def: 1.7, rand: [1.2, 2.4] },
+  { key: 'discZ', label: 'Disc Stand-off (mm)', group: 'centre', min: 0, max: 800, step: 10, def: 300, rand: [150, 500] },
+  { key: 'discStep', label: 'Ring Step (mm)', group: 'centre', min: -150, max: 150, step: 5, def: 45, rand: [-80, 100] },
+  { key: 'sideDisc', label: 'Side Medallion Ø (m)', group: 'centre', min: 0, max: 4, step: 0.1, def: 1.8, rand: [0, 2.6] },
+  { key: 'sideOffset', label: 'Medallion Offset (m)', group: 'centre', min: 2, max: 12, step: 0.1, def: 6.2, rand: [4.5, 7] },
 
-  { key: 'cells', label: 'Cells Around', group: 'facade', min: 10, max: 48, step: 2, def: 24, rand: [16, 36] },
+  { key: 'petals', label: 'Petals', group: 'petal', min: 0, max: 24, step: 1, def: 14, rand: [0, 18] },
+  { key: 'petalLength', label: 'Length (m)', group: 'petal', min: 0.5, max: 2.3, step: 0.05, def: 1.5, rand: [1, 2] },
+  { key: 'petalWidth', label: 'Width (m)', group: 'petal', min: 0.2, max: 1.1, step: 0.05, def: 0.7, rand: [0.45, 1] },
+  { key: 'petalLean', label: 'Lean (°)', group: 'petal', min: -60, max: 60, step: 1, def: 22, rand: [-45, 45] },
+  { key: 'petalAsym', label: 'Flame', group: 'petal', min: 0, max: 0.6, step: 0.01, def: 0.3, rand: [0, 0.55] },
+  { key: 'petalLayers', label: 'Layers', group: 'petal', min: 1, max: 3, step: 1, def: 3, rand: [2, 3] },
+
+  { key: 'cells', label: 'Cells Around', group: 'facade', min: 10, max: 48, step: 2, def: 24, rand: [16, 30] },
   { key: 'stretch', label: 'Radial Stretch', group: 'facade', min: 0.6, max: 1.8, step: 0.05, def: 1, rand: [0.8, 1.4] },
-  { key: 'crownHeight', label: 'Crown Height (m)', group: 'facade', min: 2, max: 12, step: 0.1, def: 7.5, rand: [6, 9.5] },
+  { key: 'crownHeight', label: 'Crown Height (m)', group: 'facade', min: 2, max: 12, step: 0.1, def: 8.4, rand: [7.8, 10] },
   { key: 'crownPoints', label: 'Crown Points', group: 'facade', min: 0, max: 9, step: 1, def: 5, rand: [0, 7] },
-  { key: 'crownDepth', label: 'Crown Depth', group: 'facade', min: 0, max: 0.6, step: 0.01, def: 0.3, rand: [0.1, 0.5] },
-  { key: 'squareness', label: 'Squareness', group: 'facade', min: 1.2, max: 5, step: 0.1, def: 2.4, rand: [1.6, 3.6] },
+  { key: 'crownDepth', label: 'Crown Depth', group: 'facade', min: 0, max: 0.6, step: 0.01, def: 0.18, rand: [0.1, 0.45] },
+  { key: 'squareness', label: 'Squareness', group: 'facade', min: 1.2, max: 5, step: 0.1, def: 2.8, rand: [1.8, 3.6] },
   { key: 'joint', label: 'Shadow Gap (mm)', group: 'facade', min: 20, max: 150, step: 5, def: 50, rand: [30, 80] },
-  { key: 'subdivide', label: 'Subdivision', group: 'facade', min: 0, max: 1, step: 0.01, def: 0.4, rand: [0.1, 0.8] },
-  { key: 'erode', label: 'Edge Erosion', group: 'facade', min: 0, max: 1, step: 0.01, def: 0.25, rand: [0, 0.6] },
+  { key: 'subdivide', label: 'Subdivision', group: 'facade', min: 0, max: 1, step: 0.01, def: 0.2, rand: [0, 0.5] },
+  { key: 'erode', label: 'Edge Erosion', group: 'facade', min: 0, max: 1, step: 0.01, def: 0.1, rand: [0, 0.5] },
 
+  { key: 'depth', label: 'Relief Depth (mm)', group: 'fret', min: -600, max: 600, step: 10, def: 260, rand: [-350, 450] },
+  { key: 'steps', label: 'Steps', group: 'fret', min: 1, max: 4, step: 1, def: 2, rand: [1, 3] },
   { key: 'detail', label: 'Detail', group: 'fret', min: 0, max: 1, step: 0.01, def: 0.6, rand: [0.3, 1] },
   { key: 'rim', label: 'Rim Width (mm)', group: 'fret', min: 30, max: 200, step: 5, def: 60, rand: [45, 100] },
-  { key: 'overlay', label: 'Raised Layer', group: 'fret', min: 0, max: 1, step: 0.01, def: 0.45, rand: [0, 0.8] },
+  { key: 'overlay', label: 'Raised Islands', group: 'fret', min: 0, max: 1, step: 0.01, def: 0.4, rand: [0, 0.8] },
 
   { key: 'boothWidth', label: 'Booth Width (m)', group: 'booth', min: 0, max: 6, step: 0.1, def: 3, rand: [2, 4] },
   { key: 'boothHeight', label: 'Booth Height (m)', group: 'booth', min: 0.8, max: 1.1, step: 0.05, def: 1.1, rand: null },
 ];
 export const STAGE_PARAM_MAP = Object.fromEntries(STAGE_PARAMS.map((p) => [p.key, p]));
 
+const CHOICES = { tiling: TILINGS, module: MODULES, motif: MOTIFS, centre: CENTRES };
+const FLAGS = ['mirror', 'truss', 'backlit'];
+
 export const STAGE_DEFAULTS = {
   ...Object.fromEntries(STAGE_PARAMS.map((p) => [p.key, p.def])),
   tiling: 'hex',
+  module: 'stepped',
   motif: 'mixed',
+  centre: 'disc',
   mirror: true,
   truss: true,
+  backlit: true,
 };
 
 export function normalizeStage(input = {}) {
   const out = {};
   for (const def of STAGE_PARAMS) out[def.key] = quantize(def, input[def.key] ?? def.def);
-  out.tiling = TILINGS[input.tiling] ? input.tiling : STAGE_DEFAULTS.tiling;
-  out.motif = MOTIFS[input.motif] ? input.motif : STAGE_DEFAULTS.motif;
-  out.mirror = typeof input.mirror === 'boolean' ? input.mirror : true;
-  out.truss = typeof input.truss === 'boolean' ? input.truss : true;
+  for (const [key, set] of Object.entries(CHOICES)) out[key] = set[input[key]] ? input[key] : STAGE_DEFAULTS[key];
+  for (const key of FLAGS) out[key] = typeof input[key] === 'boolean' ? input[key] : STAGE_DEFAULTS[key];
   return out;
 }
 
@@ -87,6 +107,20 @@ export function normalizeStageFab(input = {}) {
   for (const key of ['labels', 'led']) if (typeof input[key] === 'boolean') out[key] = input[key];
   return out;
 }
+
+// ------------------------------------------------------------------ placement
+// A part's points/cuts/holes are its FLAT cut shape. `frame` places that shape in
+// 3D: world = o + u*x + v*y, with z towards the audience.
+
+const flatFrame = (z) => ({ o: [0, 0, z], u: [1, 0, 0], v: [0, 1, 0] });
+export function world(part, [x, y]) {
+  const { o, u, v } = part.frame;
+  return [o[0] + u[0] * x + v[0] * y, o[1] + u[1] * x + v[1] * y, o[2] + u[2] * x + v[2] * y];
+}
+const mirrorPart = (pt) => {
+  const f = ([x, y, z]) => [-x, y, z];
+  return { ...pt, frame: { o: f(pt.frame.o), u: f(pt.frame.u), v: f(pt.frame.v) } };
+};
 
 // ------------------------------------------------------------------ convex geometry
 // Every lattice panel is a convex polygon, which keeps clipping and insetting exact.
@@ -243,12 +277,19 @@ function fretwork(P, motif, o) {
   const inr = inradius(P);
   const rim = Math.min(Math.max(o.rim, o.web), inr * 0.42);
   const depthMax = o.reserve ? Math.min(o.reserve - o.web * 0.6, inr * 0.9) : inr * 0.9;
-  if (motif === 'solid' || depthMax - rim < o.minSlot) return out;
+  if (motif === 'solid' || rim < o.web || depthMax - rim < o.minSlot) return out; // too small to cut into safely
   const edges = edgesOf(P);
   const keep = (poly) => {
     if (poly.length >= 3 && area(poly) > o.minSlot * o.minSlot * 1.5 && inradius(poly) > o.minSlot * 0.45) out.cuts.push(poly);
   };
-  if (o.reserve && (motif === 'louvre' || motif === 'perf')) motif = 'slots';
+  if (o.reserve && motif !== 'slots') motif = 'slots';
+
+  if (motif === 'window') {
+    // one big opening: a frame for a diffuser or infill panel
+    const w = insetConvex(P, rim);
+    if (w) keep(w);
+    return out;
+  }
 
   if (motif === 'slots') {
     // concentric rings of slots, bridged at the corners
@@ -290,6 +331,34 @@ function fretwork(P, motif, o) {
         keep(shallower(deeper(tri, e, (h * k) / n + (k ? o.web / 2 : 0)), e, (h * (k + 1)) / n - (k < n - 1 ? o.web / 2 : 0)));
       }
     });
+    return out;
+  }
+
+  if (motif === 'rays') {
+    // slats fanned from one corner
+    const n = P1.length;
+    const i = (o.parity + (o.spin || 0)) % n;
+    const V = P1[i];
+    const a0 = Math.atan2(P1[(i + 1) % n][1] - V[1], P1[(i + 1) % n][0] - V[0]);
+    let sweep = Math.atan2(P1[(i + n - 1) % n][1] - V[1], P1[(i + n - 1) % n][0] - V[0]) - a0;
+    while (sweep > Math.PI) sweep -= TAU;
+    while (sweep < -Math.PI) sweep += TAU;
+    const reach = Math.max(...P1.map((q) => Math.hypot(q[0] - V[0], q[1] - V[1])));
+    let count = Math.round(lerp(4, 11, o.detail));
+    while (count > 2 && (reach * Math.abs(sweep)) / count / 2 < o.minSlot) count--;
+    const pitch = sweep / count;
+    const r0 = Math.min(reach * 0.6, o.web / Math.abs(Math.sin(pitch / 4)) / 2);
+    const side = Math.sign(sweep) || 1;
+    for (let k = 0; k < count; k++) {
+      const b0 = a0 + pitch * (k + 0.25);
+      const b1 = a0 + pitch * (k + 0.75);
+      const half = (dir, keepSide) => [-Math.sin(dir) * keepSide * side, Math.cos(dir) * keepSide * side];
+      let q = P1;
+      for (const [nx, ny] of [half(b0, -1), half(b1, 1)]) q = clipHalf(q, nx, ny, nx * V[0] + ny * V[1]);
+      const m = (b0 + b1) / 2;
+      q = clipHalf(q, -Math.cos(m), -Math.sin(m), -(Math.cos(m) * V[0] + Math.sin(m) * V[1] + r0));
+      keep(q);
+    }
     return out;
   }
 
@@ -353,14 +422,78 @@ function panel(P, fret, extra) {
   return { points: P, holes: fret.holes, cuts: fret.cuts, label: labelSpot(P, fret.cuts, fret.holes, extra.rim), ...extra };
 }
 
-// ------------------------------------------------------------------ facade
+// ------------------------------------------------------------------ modules
+// A module turns one flat cell into the panels that build it: a single fretwork
+// panel, a stack of stepped frames, or a folded pyramid of tilted faces.
 
-function buildFacade(p, ctx) {
-  const { W, deckH, D, cy, L, S, web } = ctx;
+const MIX = ['slots', 'fan', 'rays', 'louvre', 'perf'];
+
+function modulePanels(P, m) {
+  const { web } = m.opts;
+  const inr = inradius(P);
+  const base = { t: m.t, el: m.el, minWidth: Math.min(web, inr * 2) };
+  const flat = (poly, fret, z, layer, rim = Math.min(m.opts.rim, inradius(poly) * 0.42)) => ({ ...panel(poly, fret, { ...base, rim, layer }), frame: flatFrame(z) });
+
+  if (m.module === 'pyramid' && Math.abs(m.depth) >= 30 && P.length <= 8) {
+    const c = centroid(P);
+    const out = [];
+    P.forEach((a, i) => {
+      const b = P[(i + 1) % P.length];
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (len < web * 3) return;
+      const u = [(b[0] - a[0]) / len, (b[1] - a[1]) / len, 0];
+      const along = (c[0] - a[0]) * u[0] + (c[1] - a[1]) * u[1];
+      const px = c[0] - a[0] - along * u[0];
+      const py = c[1] - a[1] - along * u[1];
+      const slant = Math.hypot(px, py, m.depth);
+      const tri = insetConvex([[0, 0], [len, 0], [along, slant]], 4);
+      if (!tri || inradius(tri) < web) return;
+      const fret = fretwork(tri, m.motif, { ...m.opts, ang: 0, spin: 2, reserve: 0 });
+      out.push({
+        ...panel(tri, fret, { ...base, rim: Math.min(m.opts.rim, inradius(tri) * 0.42), layer: 1 + (i % 2), tilted: true }),
+        frame: { o: [a[0], a[1], m.z0], u, v: [px / slant, py / slant, m.depth / slant] },
+      });
+    });
+    if (out.length) return out;
+  }
+
+  if (m.module === 'stepped') {
+    let K = m.steps;
+    const minBand = Math.max(web * 1.8, 55);
+    while (K > 0 && (inr * 0.85) / (K + 1) < minBand) K--;
+    if (K > 0) {
+      const band = (inr * 0.85) / (K + 1);
+      const out = [];
+      for (let k = 0; k < K; k++) {
+        const outer = k ? insetConvex(P, k * band) : P;
+        const win = insetConvex(P, k * band + band * 0.72);
+        if (!outer || !win) break;
+        out.push(flat(outer, { cuts: [win], holes: [] }, m.z0 + (k * m.depth) / K, k, band * 0.72));
+      }
+      const cap = insetConvex(P, K * band);
+      if (cap) out.push(flat(cap, fretwork(cap, m.motif, m.opts), m.z0 + m.depth, K));
+      return out;
+    }
+  }
+
+  // flat panel, optionally with a smaller island stood off its centre
+  const island = m.overlayRoll < m.overlay && inr > web * 5 ? insetConvex(P, inr * 0.5) : null;
+  if (!island) return [flat(P, fretwork(P, m.motif, m.opts), m.z0, 0)];
+  const solid = m.motif === 'solid';
+  return [
+    flat(P, fretwork(P, solid ? 'solid' : 'slots', { ...m.opts, reserve: inr * 0.5 }), m.z0, 0),
+    { ...flat(island, fretwork(island, solid ? 'solid' : 'fan', { ...m.opts, rim: web, detail: m.opts.detail * 0.5 }), m.z0 + Math.max(60, Math.abs(m.depth) * 0.5), 1, web), raised: true },
+  ];
+}
+
+// ------------------------------------------------------------------ lattice
+
+function buildFacade(p, ctx, holes) {
+  const { W, deckH, cy, L, S, web } = ctx;
   const N = p.cells;
   const dv = TAU / N;
-  const rBase = D / 2 + 150 + p.joint;
-  const rTop = Math.max(deckH + p.crownHeight * M - cy, D / 2 + 900);
+  const rBase = ctx.rBase;
+  const rTop = Math.max(deckH + p.crownHeight * M - cy, rBase + 900);
   const rSide = W / 2;
   const e = p.squareness;
   const silhouette = (th) => {
@@ -377,8 +510,7 @@ function buildFacade(p, ctx) {
     const a = Math.PI / 2 - v * dv;
     return [r * Math.cos(a), -cy - r * Math.sin(a)];
   };
-  const order = ['slots', 'fan', 'louvre', 'perf'];
-  const shift = p.seed % order.length;
+  const shift = p.seed % MIX.length;
   const parts = [];
 
   for (const cell of tilingCells(p.tiling, N, uMax)) {
@@ -393,6 +525,8 @@ function buildFacade(p, ctx) {
     const erodeRoll = rng();
     if (edge > 1) continue;
     if (edge > 0.7 && erodeRoll < (p.erode * (edge - 0.7)) / 0.3) continue;
+    // medallions punch clean holes through the lattice
+    if (holes.some((h) => [c, ...raw].some(([x, y]) => Math.hypot(Math.abs(x) - h.x, y - h.y) < h.r))) continue;
 
     let poly = clipHalf(raw, 0, 1, -(deckH + 30));
     poly = clipHalf(clipHalf(poly, 1, 0, W / 2), -1, 0, W / 2);
@@ -407,39 +541,110 @@ function buildFacade(p, ctx) {
       const P = insetConvex(piece, p.joint / 2);
       const rollMotif = rng();
       const rollPick = rng();
-      const rollOver = rng();
+      const overlayRoll = rng();
       if (!P || inradius(P) < web * 0.9) continue;
       const pc = centroid(P);
-      const inr = inradius(P);
       let motif = p.motif;
-      if (motif === 'mixed') motif = rollMotif < p.chaos * 0.5 ? order[Math.floor(rollPick * order.length)] : order[(cell.i + shift) % order.length];
-      const opts = {
-        web, rim: p.rim, detail: p.detail, minSlot: ctx.minSlot, minHoleR: ctx.minHoleR,
-        ang: Math.atan2(pc[1] + cy, pc[0]), parity: cell.i % 2, reserve: 0,
-      };
-      const common = { t, el: 'facade', rim: Math.min(p.rim, inr * 0.42), minWidth: Math.min(web, inr * 2) };
-      // raised layer: a smaller panel stood off the centre of this one
-      const island = rollOver < p.overlay && inr > web * 5 ? insetConvex(P, inr * 0.5) : null;
-      if (island) {
-        parts.push(panel(P, fretwork(P, motif === 'solid' ? 'solid' : 'slots', { ...opts, reserve: inr * 0.5 }), { ...common, z: 0 }));
-        parts.push(panel(island, fretwork(island, motif === 'solid' ? 'solid' : 'fan', { ...opts, rim: web, detail: p.detail * 0.5 }), { ...common, rim: web, z: 1, t: clamp(t + 0.3, 0, 1) }));
-      } else {
-        parts.push(panel(P, fretwork(P, motif, opts), { ...common, z: 0 }));
-      }
+      if (motif === 'mixed') motif = rollMotif < p.chaos * 0.5 ? MIX[Math.floor(rollPick * MIX.length)] : MIX[(cell.i + shift) % MIX.length];
+      parts.push(
+        ...modulePanels(P, {
+          module: p.module, motif, depth: p.depth, steps: p.steps, overlay: p.overlay, overlayRoll, z0: 0, t, el: 'facade',
+          opts: { ...ctx.fret, ang: Math.atan2(pc[1] + cy, pc[0]), parity: cell.i % 2, reserve: 0 },
+        }),
+      );
     }
   }
   if (!p.mirror) return parts;
-  const flip = (pts) => pts.map(([x, y]) => [-x, y]).reverse();
-  const mirrored = parts
-    .filter((pt) => Math.abs(centroid(pt.points)[0]) > 1)
-    .map((pt) => ({
-      ...pt,
-      points: flip(pt.points),
-      cuts: pt.cuts.map(flip),
-      holes: pt.holes.map((h) => ({ ...h, x: -h.x })),
-      label: [-pt.label[0], pt.label[1]],
-    }));
-  return [...mirrored, ...parts];
+  return [...parts.filter((pt) => Math.abs(world(pt, centroid(pt.points))[0]) > 1).map(mirrorPart), ...parts];
+}
+
+// ------------------------------------------------------------------ petals
+
+// One petal in its own frame: base at the origin, tip along +x. Both sides are
+// concave curves, so the outline is convex however lopsided the flame gets.
+function petalShape(len, width, asym) {
+  const n = 12;
+  const side = (k) => Array.from({ length: n + 1 }, (_, i) => [(i / n) * len, k * Math.sin((Math.PI * i) / n) ** 0.85]);
+  const up = side((width / 2) * (1 + asym));
+  const down = side((-width / 2) * (1 - asym)).reverse();
+  return [...up, ...down.slice(1, -1)];
+}
+
+// A petal's stacked layers, flat and unplaced (used by the ring and the source preview).
+function petalLayers(P, p, ctx, t) {
+  const inr = inradius(P);
+  const K = p.petalLayers;
+  const out = [];
+  for (let k = 0; k < K; k++) {
+    const poly = k ? insetConvex(P, k * inr * 0.3) : P;
+    if (!poly || inradius(poly) < ctx.web * 1.2) break;
+    const top = k === K - 1;
+    const pin = inradius(poly);
+    let fret = { cuts: [], holes: [] };
+    if (top) {
+      const [x, y] = centroid(poly);
+      const r = pin * 0.5;
+      if (r >= ctx.fret.minHoleR) fret.holes.push({ x, y, r, kind: 'bubble' }); // the eye
+    } else if (p.motif !== 'solid') {
+      fret = fretwork(poly, 'slots', { ...ctx.fret, rim: Math.min(ctx.fret.rim, 45), detail: 0, ang: 0, parity: 0, reserve: inr * 0.3 + ctx.web });
+    }
+    out.push({ ...panel(poly, fret, { t: clamp(t + k * 0.25, 0, 1), el: 'petal', rim: Math.min(45, pin * 0.4), minWidth: ctx.web, layer: k }), z: k });
+  }
+  return out;
+}
+
+function buildPetals(p, ctx) {
+  const n = p.petals;
+  if (!n) return [];
+  const { cy, deckH, L, S } = ctx;
+  const len = Math.min(p.petalLength * M, L);
+  const width = Math.min(p.petalWidth * M, S);
+  const r0 = ctx.rInner + 100;
+  const step = Math.max(40, Math.abs(p.depth) * 0.35);
+  const parts = [];
+  for (let i = 0; i < n; i++) {
+    const th = (i * TAU) / n; // clockwise from straight up
+    if (p.mirror && th > Math.PI + 1e-9) continue;
+    const axis = p.mirror && (th < 1e-9 || Math.abs(th - Math.PI) < 1e-9);
+    const phi = Math.atan2(-Math.cos(th), Math.sin(th)) + (axis ? 0 : (p.petalLean * Math.PI) / 180);
+    const base = [r0 * Math.sin(th), -cy - r0 * Math.cos(th)];
+    const c = Math.cos(phi);
+    const s = Math.sin(phi);
+    const raw = petalShape(len, width, axis ? 0 : p.petalAsym).map(([x, y]) => [base[0] + x * c - y * s, base[1] + x * s + y * c]);
+    const P = clipHalf(raw, 0, 1, -(deckH + 30));
+    if (P.length < 3 || area(P) < 0.6 * area(raw)) continue;
+    for (const layer of petalLayers(P, p, ctx, 0.35)) {
+      const { z, ...rest } = layer;
+      const part = { ...rest, frame: flatFrame(ctx.petalZ + z * step) };
+      parts.push(part);
+      if (p.mirror && !axis) parts.push(mirrorPart(part));
+    }
+  }
+  return parts;
+}
+
+// ------------------------------------------------------------------ medallions
+
+function buildDisc(discParams, seedShift, D, cx, cy, z0, step, ctx) {
+  const { L, S } = ctx;
+  const k = D / DISC_REF;
+  const src = { ...DEFAULTS, ...discParams };
+  // manufacturing limits are set at full size, so a small medallion keeps cuttable holes and webs
+  const limits = { minHole: (ctx.fret.minHoleR * 2.2) / k, minWeb: ctx.web / k };
+  const ref = generate({ ...scaleParams(src, DISC_REF / src.outerDiameter), ...limits, seed: (src.seed + seedShift) % 1000 }, { fit: { L: L / k, S: S / k } });
+  const parts = ref.parts.map((pt) => ({
+    points: pt.points.map(([x, y]) => [x * k + cx, y * k - cy]),
+    holes: pt.holes.map((h) => ({ ...h, x: h.x * k + cx, y: h.y * k - cy, r: h.r * k })),
+    cuts: [],
+    label: [pt.label[0] * k + cx, pt.label[1] * k - cy],
+    minWidth: pt.minWidth * k,
+    t: pt.t,
+    el: 'disc',
+    layer: pt.ring,
+    frame: flatFrame(z0 + pt.ring * step),
+  }));
+  const hairlines = ref.hairlines.map((h) => ({ t: h.t, r: h.r * k, a0: h.a0, a1: h.a1 }));
+  return { parts, traces: { cx, cy: -cy, z: z0 - 20, hairlines } };
 }
 
 // ------------------------------------------------------------------ stage
@@ -448,50 +653,73 @@ function partArea(part) {
   return area(part.points) - part.holes.reduce((s, h) => s + Math.PI * h.r * h.r, 0) - (part.cuts || []).reduce((s, c) => s + area(c), 0);
 }
 
+function context(p, fab) {
+  const L = Math.max(fab.sheetW, fab.sheetH) - 2 * EDGE;
+  const S = Math.min(fab.sheetW, fab.sheetH) - 2 * EDGE;
+  const D = p.discDiameter * M;
+  const deckH = p.deckHeight * M;
+  const web = Math.max(30, fab.tool * 3, fab.thickness * 2.5);
+  const fret = { web, rim: p.rim, detail: p.detail, minSlot: Math.max(22, fab.tool * 2.5), minHoleR: Math.max(14, fab.tool) };
+  const rInner = D / 2 + (p.centre === 'disc' ? 60 : 0);
+  const petalLen = p.petals ? Math.min(p.petalLength * M, L) : 0;
+  return {
+    L, S, D, deckH, web, fret, rInner,
+    W: p.width * M,
+    cy: deckH + p.lift * M + D / 2,
+    rBase: rInner + 100 + p.joint + petalLen * 0.55,
+    petalZ: Math.max(80, p.discZ * 0.5),
+  };
+}
+
+// The origin pieces every instance is spawned from, laid flat for the editor preview.
+export function sourcePanels(input, fabInput = {}) {
+  const p = normalizeStage(input);
+  const ctx = context(p, normalizeStageFab(fabInput));
+  const HEX = [0, 1, 2, 3, 4, 5].map((i) => [520 * Math.sin((i * Math.PI) / 3), -520 * Math.cos((i * Math.PI) / 3)]);
+  const shape = { hex: HEX, diamond: [[0, -640], [420, 0], [0, 640], [-420, 0]], shard: [[0, -560], [500, 320], [-500, 320]], brick: [[-560, -360], [560, -360], [560, 360], [-560, 360]] }[p.tiling] || HEX;
+  const cell = modulePanels(shape, {
+    module: p.module, motif: p.motif === 'mixed' ? MIX[p.seed % MIX.length] : p.motif, depth: p.depth, steps: p.steps,
+    overlay: p.overlay, overlayRoll: 0.5, z0: 0, t: 0.5, el: 'facade', opts: { ...ctx.fret, ang: Math.PI / 2, parity: 0, reserve: 0 },
+  });
+  const len = Math.min(p.petalLength * M, ctx.L);
+  const up = petalShape(len, Math.min(p.petalWidth * M, ctx.S), p.petalAsym).map(([x, y]) => [y, len / 2 - x]);
+  const step = Math.max(40, Math.abs(p.depth) * 0.35);
+  const petal = p.petals ? petalLayers(up, p, ctx, 0.35).map(({ z, ...rest }) => ({ ...rest, frame: flatFrame(z * step) })) : [];
+  return { cell, petal };
+}
+
 export function generateStage(input, discParams = DEFAULTS, fabInput = {}) {
   const p = normalizeStage(input);
   const fab = normalizeStageFab(fabInput);
-  const L = Math.max(fab.sheetW, fab.sheetH) - 2 * EDGE;
-  const S = Math.min(fab.sheetW, fab.sheetH) - 2 * EDGE;
-  const W = p.width * M;
-  const deckH = p.deckHeight * M;
-  const D = p.discDiameter * M;
-  const cy = deckH + p.lift * M + D / 2;
-  const web = Math.max(30, fab.tool * 3, fab.thickness * 2.5);
-  const ctx = { W, deckH, D, cy, L, S, web, minSlot: Math.max(22, fab.tool * 2.5), minHoleR: Math.max(14, fab.tool) };
+  const ctx = context(p, fab);
+  const { L, S, W, deckH, D, cy, web } = ctx;
   const notes = [];
+  const traces = [];
 
-  // centrepiece: the current disc design, re-sliced so each part fits a sheet
-  const k = D / DISC_REF;
-  const ref = generate(scaleParams({ ...DEFAULTS, ...discParams }, DISC_REF / (discParams.outerDiameter || DEFAULTS.outerDiameter)), {
-    fit: { L: L / k, S: S / k },
-  });
-  const disc = {
-    ...ref,
-    parts: ref.parts.map((pt) => ({
-      ...pt,
-      points: pt.points.map(([x, y]) => [x * k, y * k]),
-      holes: pt.holes.map((h) => ({ ...h, x: h.x * k, y: h.y * k, r: h.r * k })),
-      label: [pt.label[0] * k, pt.label[1] * k],
-      minWidth: pt.minWidth * k,
-      spots: [],
-    })),
-    hairlines: ref.hairlines.map((h) => ({ ...h, r: h.r * k, pads: h.pads.map((d) => ({ x: d.x * k, y: d.y * k, r: d.r * k })) })),
-    stats: { ...ref.stats, outerDiameter: D },
-  };
-  const centreParts = disc.parts.map((pt) => ({
-    points: pt.points.map(([x, y]) => [x, y - cy]),
-    holes: pt.holes.map((h) => ({ ...h, y: h.y - cy })),
-    cuts: [],
-    label: [pt.label[0], pt.label[1] - cy],
-    minWidth: pt.minWidth,
-    t: pt.t,
-    el: 'centre',
-    z: 2,
-  }));
+  const centreParts = [];
+  if (p.centre === 'disc') {
+    const disc = buildDisc(discParams, 0, D, 0, cy, p.discZ, p.discStep, ctx);
+    centreParts.push(...disc.parts);
+    traces.push(disc.traces);
+  }
 
-  const facade = p.tiling === 'none' ? [] : buildFacade(p, ctx);
-  if (p.tiling !== 'none' && !facade.length) notes.push('No room for the panel lattice: widen the stage, raise the crown or shrink the disc.');
+  // side medallions: a second disc design, mirrored either side
+  const holes = [];
+  const sideD = p.sideDisc * M;
+  if (sideD >= 800) {
+    const sx = Math.min(p.sideOffset * M, W / 2 - sideD / 2 - 100);
+    if (sx - sideD / 2 < ctx.rBase) notes.push('Side medallions overlap the centre: raise Medallion Offset or widen the stage.');
+    else {
+      const side = buildDisc(discParams, 17, sideD, sx, cy, p.discZ * 0.7, p.discStep, ctx);
+      centreParts.push(...side.parts, ...side.parts.map(mirrorPart));
+      traces.push(side.traces, { ...side.traces, flip: true });
+      holes.push({ x: sx, y: -cy, r: sideD / 2 + 40 + p.joint });
+    }
+  }
+
+  const facade = p.tiling === 'none' ? [] : buildFacade(p, ctx, holes);
+  if (p.tiling !== 'none' && !facade.length) notes.push('No room for the panel lattice: widen the stage, raise the crown or shrink the centre.');
+  const petals = buildPetals(p, ctx);
 
   const booth = [];
   const bw = p.boothWidth * M;
@@ -502,45 +730,56 @@ export function generateStage(input, discParams = DEFAULTS, fabInput = {}) {
     for (let i = 0; i < n; i++) {
       const x0 = -bw / 2 + i * pw;
       const P = insetConvex([[x0, -deckH], [x0, -deckH - bh], [x0 + pw, -deckH - bh], [x0 + pw, -deckH]], 6);
-      const fret = fretwork(P, p.motif === 'solid' ? 'solid' : 'slots', { web, rim: Math.max(p.rim, 70), detail: p.detail, minSlot: ctx.minSlot, minHoleR: ctx.minHoleR, ang: 0, parity: 0, reserve: 0 });
-      booth.push(panel(P, fret, { t: 0, el: 'booth', z: 3, rim: Math.max(p.rim, 70), minWidth: web }));
+      const fret = fretwork(P, p.motif === 'solid' ? 'solid' : 'slots', { ...ctx.fret, rim: Math.max(p.rim, 70), ang: 0, parity: 0, reserve: 0 });
+      booth.push({ ...panel(P, fret, { t: 0, el: 'booth', layer: 0, rim: Math.max(p.rim, 70), minWidth: web }), frame: flatFrame(1400) });
     }
   }
 
-  const parts = [...facade, ...centreParts, ...booth].map((pt, i) => ({ ...pt, id: String(i + 1), spots: [] }));
+  const parts = [...facade, ...petals, ...centreParts, ...booth].map((pt, i) => ({ ...pt, id: String(i + 1), spots: [] }));
 
   let top = deckH;
   let half = W / 2;
+  let zMax = 0;
+  let zMin = 0;
   for (const pt of parts) {
-    for (const [x, y] of pt.points) {
+    for (const q of pt.points) {
+      const [x, y, z] = world(pt, q);
       if (-y > top) top = -y;
       if (Math.abs(x) > half) half = Math.abs(x);
+      if (pt.el !== 'booth') {
+        zMax = Math.max(zMax, z);
+        zMin = Math.min(zMin, z);
+      }
     }
   }
   const total = parts.reduce((s, pt) => s + partArea(pt), 0);
+  const footprint = parts.reduce((s, pt) => s + area(pt.points), 0);
   const edges = parts.reduce((s, pt) => s + perimeter(pt.points), 0);
-  const traces = disc.hairlines.reduce((s, h) => s + h.r * (h.a1 - h.a0), 0);
+  const traceLen = traces.reduce((s, tr) => s + tr.hairlines.reduce((q, h) => q + h.r * (h.a1 - h.a0), 0), 0);
   const density = (MATERIALS[fab.material] || MATERIALS.birch).density; // g/cm³
   const truss = p.truss ? { w: 2 * half + 1200, h: top + 600 } : null;
 
   return {
     params: p,
     fab,
-    disc,
+    traces,
     centre: [0, -cy],
     parts,
     deck: { w: W, h: deckH, d: p.deckDepth * M },
     truss,
     notes,
-    extent: { half, top },
+    extent: { half, top, zMin, zMax },
     stats: {
       parts: parts.length,
-      raised: parts.filter((pt) => pt.z === 1).length,
+      raised: parts.filter((pt) => pt.frame.o[2] > 1 && !pt.tilted).length,
+      tilted: parts.filter((pt) => pt.tilted).length,
       widthM: (2 * half) / M,
       heightM: top / M,
+      reliefMm: zMax - zMin,
       areaM2: total / 1e6,
+      diffuserM2: p.backlit ? (footprint - total) / 1e6 : 0,
       massKg: (total * fab.thickness * density) / 1e6,
-      ledM: fab.led ? (edges + traces) / M : 0,
+      ledM: fab.led ? (edges + traceLen) / M : 0,
       deckModules: Math.ceil(W / 2000) * Math.ceil((p.deckDepth * M) / 1000),
       trussM: truss ? (2 * truss.h + truss.w) / M : 0,
       cutouts: parts.reduce((s, pt) => s + pt.holes.length + pt.cuts.length, 0),
