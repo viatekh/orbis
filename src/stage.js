@@ -9,6 +9,8 @@
 import { subRng } from './rng.js';
 import { generate, scaleParams, DEFAULTS, quantize } from './generator.js';
 import { MATERIALS, signedArea } from './fabrication.js';
+import { lerp, clamp, area, perimeter, centroid, clipHalf, edgesOf, deeper, shallower, solid, insetConvex, insideBy, inradius, segDist } from './convex.js';
+import { PATTERNS, patternCells } from './patterns.js';
 
 const M = 1000;
 const TAU = Math.PI * 2;
@@ -17,11 +19,11 @@ const DISC_REF = 1000; // the disc is generated at this diameter, then scaled
 
 export const TILINGS = { hex: 'Hex', diamond: 'Diamond', shard: 'Shard', brick: 'Brick', none: 'None' };
 export const MODULES = { stepped: 'Stepped', pyramid: 'Folded', scales: 'Scales', flat: 'Flat' };
-export const MOTIFS = { mixed: 'Mixed', window: 'Window', slots: 'Nested slots', fan: 'Fan', rays: 'Slat fan', louvre: 'Louvre', perf: 'Perforated', solid: 'Solid' };
+export const MOTIFS = { mixed: 'Mixed', window: 'Window', slots: 'Nested slots', fan: 'Fan', rays: 'Slat fan', louvre: 'Louvre', perf: 'Perforated', ...PATTERNS, solid: 'Solid' };
 export const CENTRES = { disc: 'Ring disc', iris: 'Iris', star: 'Star', rosette: 'Rosette', mandala: 'Mandala', opening: 'Void', none: 'No core' };
 export const PETAL_SHAPES = { leaf: 'Leaf', eye: 'Eye', teardrop: 'Teardrop', diamond: 'Diamond', blade: 'Blade', freeform: 'Freeform' };
 export const LAYERS = { spike: 'Spikes', tendril: 'Tendrils', facade: 'Lattice', petal: 'Petals', core: 'Core' };
-export const ETCH_PATTERNS = { outline: 'Outline', voronoi: 'Voronoi', hatch: 'Hatch', grid: 'Grid', rings: 'Rings' };
+export const ETCH_PATTERNS = { outline: 'Outline', hatch: 'Hatch', grid: 'Grid', rings: 'Contours', ...PATTERNS };
 export const TENDRIL_STYLES = { horn: 'Horn', vine: 'Vine', feather: 'Feather' };
 const INHERIT = { inherit: 'Same as cell' };
 export const PIECE_MODULES = { ...INHERIT, ...MODULES };
@@ -195,66 +197,6 @@ const mirrorPart = (pt) => {
 // ------------------------------------------------------------------ convex geometry
 // Every lattice panel is a convex polygon, which keeps clipping and insetting exact.
 
-const lerp = (a, b, t) => a + (b - a) * t;
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const area = (pts) => Math.abs(signedArea(pts));
-const perimeter = (pts) => pts.reduce((s, p, i) => s + Math.hypot(p[0] - pts[(i + 1) % pts.length][0], p[1] - pts[(i + 1) % pts.length][1]), 0);
-const centroid = (pts) => [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
-
-// Keep the part of a convex polygon where nx*x + ny*y <= c.
-function clipHalf(poly, nx, ny, c) {
-  const out = [];
-  for (let i = 0; i < poly.length; i++) {
-    const a = poly[i];
-    const b = poly[(i + 1) % poly.length];
-    const da = nx * a[0] + ny * a[1] - c;
-    const db = nx * b[0] + ny * b[1] - c;
-    if (da <= 0) out.push(a);
-    if (da <= 0 !== db <= 0) {
-      const t = da / (da - db);
-      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
-    }
-  }
-  return out;
-}
-
-// Inward unit normal and offset of each edge: dist(p) = nx*x + ny*y - c is the depth inside that edge.
-function edgesOf(poly) {
-  const sgn = Math.sign(signedArea(poly)) || 1;
-  return poly.map((a, i) => {
-    const b = poly[(i + 1) % poly.length];
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-    const nx = (-sgn * (b[1] - a[1])) / len;
-    const ny = (sgn * (b[0] - a[0])) / len;
-    return { nx, ny, c: nx * a[0] + ny * a[1] };
-  });
-}
-const deeper = (poly, e, d) => clipHalf(poly, -e.nx, -e.ny, -(e.c + d)); // keep depth >= d
-const shallower = (poly, e, d) => clipHalf(poly, e.nx, e.ny, e.c + d); // keep depth <= d
-const solid = (poly) => (poly.length >= 3 && area(poly) > 1 ? poly : null);
-
-function insetConvex(poly, d) {
-  let out = poly;
-  for (const e of edgesOf(poly)) {
-    out = deeper(out, e, d);
-    if (out.length < 3) return null;
-  }
-  return solid(out);
-}
-
-// Depth of a point inside a convex polygon (negative outside).
-function insideBy(poly, x, y) {
-  return edgesOf(poly).reduce((m, e) => Math.min(m, e.nx * x + e.ny * y - e.c), Infinity);
-}
-const inradius = (poly) => insideBy(poly, ...centroid(poly));
-
-function segDist(x, y, a, b) {
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
-  const t = clamp(((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1);
-  return Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t);
-}
-
 // The tightest bounding box of a convex polygon lies along one of its edges.
 function fitsSheet(poly, L, S) {
   for (let i = 0; i < poly.length; i++) {
@@ -374,7 +316,7 @@ function fretwork(P, motif, o) {
       edges.forEach((e, i) => {
         let q = shallower(deeper(P, e, d1), e, d2);
         edges.forEach((f, j) => {
-          if (j !== i && q.length >= 3) q = deeper(q, f, d2 + o.web * 0.7);
+          if (j !== i && q.length >= 3) q = deeper(q, f, d2 + o.web);
         });
         keep(q);
       });
@@ -384,6 +326,18 @@ function fretwork(P, motif, o) {
 
   const P1 = insetConvex(P, rim);
   if (!P1) return out;
+
+  if (PATTERNS[motif]) {
+    const c = centroid(P1);
+    const pitch = Math.max(lerp(300, 135, o.detail), (o.minSlot + o.web) * 1.7);
+    const res = patternCells(motif, P1, {
+      pitch, gap: o.web, minR: o.minHoleR, ang: o.ang || 0,
+      rng: subRng('fret', motif, Math.round(c[0]), Math.round(c[1]), P.length),
+    });
+    res.polys.forEach(keep);
+    for (const h of res.holes) out.holes.push({ ...h, kind: 'bubble' });
+    return out;
+  }
 
   if (motif === 'fan') {
     // spokes from the centre to every corner, with concentric webs
@@ -547,6 +501,25 @@ function etchDetail(P, fret, rim) {
       if (!ring) break;
       ring.forEach((q, i) => segs.push([q, ring[(i + 1) % ring.length]]));
     }
+  } else if (ETCH.pattern !== 'voronoi') {
+    // library patterns: draw each shape's outline once
+    const res = patternCells(ETCH.pattern, Pin, {
+      pitch: spacing * 1.25, gap: Math.max(16, spacing * 0.16), inset: 0, minR: 10, ang: edge0,
+      rng: subRng('etch', ETCH.pattern, Math.round(c[0]), Math.round(c[1]), P.length),
+    });
+    const seen = new Set();
+    const key = (q) => `${Math.round(q[0])},${Math.round(q[1])}`;
+    for (const poly of res.polys) {
+      poly.forEach((a, i) => {
+        const b = poly[(i + 1) % poly.length];
+        const k = [key(a), key(b)].sort().join('|');
+        if (!seen.has(k) && insideBy(Pin, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2) > 0.5) segs.push([a, b]);
+        seen.add(k);
+      });
+    }
+    for (const h of res.holes) {
+      for (let i = 0; i < 14; i++) segs.push([[h.x + h.r * Math.cos((i * TAU) / 14), h.y + h.r * Math.sin((i * TAU) / 14)], [h.x + h.r * Math.cos(((i + 1) * TAU) / 14), h.y + h.r * Math.sin(((i + 1) * TAU) / 14)]]);
+    }
   } else {
     // voronoi: each pair of neighbouring sites shares one edge on their bisector
     const rng = subRng('etch', Math.round(c[0]), Math.round(c[1]), P.length);
@@ -596,7 +569,7 @@ function etchDetail(P, fret, rim) {
     }
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
     for (const [u, v] of keep) {
-      if ((v - u) * len > 25) out.etchLines.push([[a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u], [a[0] + (b[0] - a[0]) * v, a[1] + (b[1] - a[1]) * v]]);
+      if ((v - u) * len > (PATTERNS[ETCH.pattern] && ETCH.pattern !== "voronoi" ? 6 : 25)) out.etchLines.push([[a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u], [a[0] + (b[0] - a[0]) * v, a[1] + (b[1] - a[1]) * v]]);
     }
   }
   return out;

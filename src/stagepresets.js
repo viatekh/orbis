@@ -12,4 +12,8 @@ export const STAGE_PRESETS = {
   'Flame Wings': { centre: 'mandala', corePoints: 8, discDiameter: 3.8, sideDisc: 1.6, sideOffset: 4.6, petals: 0, tiling: 'none', tendrils: 4, tendrilStyle: 'feather', tendrilLength: 7, tendrilCurl: 0.5, tendrilWidth: 0.8, tendrilLeaves: 0.9, etchPattern: 'hatch', etch: 2, width: 20 },
   'Vine Garden': { centre: 'rosette', corePoints: 7, petals: 12, petalShape: 'teardrop', tiling: 'hex', cells: 30, crownHeight: 6.5, tendrils: 3, tendrilStyle: 'vine', tendrilLength: 6.5, tendrilCurl: -0.8, etchPattern: 'voronoi', etch: 2, sideDisc: 0, width: 20 },
   'Solid Wall': { centre: 'none', sideDisc: 0, petals: 0, tiling: 'hex', module: 'stepped', depth: 200, cells: 20, crownPoints: 0, squareness: 4, erode: 0, form: 'ripple', formDepth: 0.8 },
+  'Honeycomb Hive': { centre: 'rosette', corePoints: 6, tiling: 'hex', module: 'flat', motif: 'honeycomb', petalMotif: 'bloom', overlay: 0, detail: 0.8, cells: 20, petals: 12, etchPattern: 'honeycomb', etch: 2 },
+  'Shattered Glass': { centre: 'star', corePoints: 7, tiling: 'shard', module: 'flat', motif: 'crackle', petalMotif: 'crackle', overlay: 0, detail: 0.7, cells: 18, petals: 10, petalShape: 'blade', sideDisc: 0, etchPattern: 'crackle', etch: 2 },
+  'Bloom Temple': { centre: 'mandala', corePoints: 8, tiling: 'diamond', module: 'stepped', steps: 1, motif: 'bloom', petalMotif: 'sunflower', detail: 0.9, cells: 16, petals: 16, petalShape: 'teardrop', etchPattern: 'arcs', etch: 2 },
+  'Tide Wall': { centre: 'iris', corePoints: 10, tiling: 'brick', module: 'flat', motif: 'waves', petalMotif: 'scales', overlay: 0.2, detail: 0.8, cells: 18, petals: 0, sideDisc: 0, crownPoints: 0, squareness: 2, etchPattern: 'waves', etch: 2 },
 };

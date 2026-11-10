@@ -207,3 +207,32 @@ test('tendrils, layers, mandala core, freeform petals and scaling', () => {
   assert.ok(Math.abs(big.discDiameter - STAGE_DEFAULTS.discDiameter * 1.5) < 0.06 && big.rim === 90);
   assert.equal(big.cells, STAGE_DEFAULTS.cells);
 });
+
+test('pattern library keeps a full web between every cutout', async () => {
+  const { PATTERNS } = await import('../src/patterns.js');
+  const seg = (x, y, a, b) => {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t);
+  };
+  const toPoly = (x, y, Q) => Math.min(...Q.map((a, i) => seg(x, y, a, Q[(i + 1) % Q.length])));
+  for (const motif of Object.keys(PATTERNS)) {
+    for (const detail of [0, 1]) {
+      const stage = generateStage({ ...STAGE_DEFAULTS, motif, petalMotif: motif, module: 'flat', overlay: 0, detail, cells: 14 }, DEFAULTS);
+      const panels = stage.parts.filter((p) => p.el === 'facade' || p.el === 'petal');
+      assert.ok(panels.filter((p) => p.cuts.length + p.holes.length > 1).length > panels.length / 2, `${motif} fills most panels`);
+      let web = Infinity;
+      for (const p of panels) {
+        p.cuts.forEach((A, i) => {
+          for (const B of p.cuts.slice(i + 1)) for (const [P, Q] of [[A, B], [B, A]]) for (const [x, y] of P) web = Math.min(web, toPoly(x, y, Q));
+          for (const h of p.holes) web = Math.min(web, toPoly(h.x, h.y, A) - h.r);
+        });
+        p.holes.forEach((a, i) => {
+          for (const b of p.holes.slice(i + 1)) web = Math.min(web, Math.hypot(a.x - b.x, a.y - b.y) - a.r - b.r);
+        });
+      }
+      assert.ok(web > 29.5, `${motif} at detail ${detail}: web ${web.toFixed(1)}`);
+    }
+  }
+});
