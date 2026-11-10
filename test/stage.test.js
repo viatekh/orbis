@@ -72,7 +72,7 @@ test('fretwork stays inside its panel and leaves a web', () => {
 });
 
 test('modules give real depth', () => {
-  const flat = generateStage({ ...STAGE_DEFAULTS, module: 'flat', overlay: 0, petals: 0, discZ: 0, discStep: 0, sideDisc: 0, layerGap: 0 }, DEFAULTS);
+  const flat = generateStage({ ...STAGE_DEFAULTS, module: 'flat', overlay: 0, petals: 0, discZ: 0, discStep: 0, sideDisc: 0, layerGap: 0, form: 'flat', zones: 1 }, DEFAULTS);
   assert.equal(flat.stats.reliefMm, 0);
   const stepped = generateStage({ ...STAGE_DEFAULTS, module: 'stepped', depth: 400 }, DEFAULTS);
   assert.ok(stepped.stats.reliefMm >= 400);
@@ -219,7 +219,7 @@ test('pattern library keeps a full web between every cutout', async () => {
   const toPoly = (x, y, Q) => Math.min(...Q.map((a, i) => seg(x, y, a, Q[(i + 1) % Q.length])));
   for (const motif of Object.keys(PATTERNS)) {
     for (const detail of [0, 1]) {
-      const stage = generateStage({ ...STAGE_DEFAULTS, motif, petalMotif: motif, module: 'flat', overlay: 0, detail, cells: 14 }, DEFAULTS);
+      const stage = generateStage({ ...STAGE_DEFAULTS, motif, petalMotif: motif, module: 'flat', overlay: 0, detail, cells: 14, zones: 1 }, DEFAULTS);
       const panels = stage.parts.filter((p) => p.el === 'facade' || p.el === 'petal');
       assert.ok(panels.filter((p) => p.cuts.length + p.holes.length > 1).length > panels.length / 3, `${motif} fills most panels`);
       let web = Infinity;
@@ -240,7 +240,7 @@ test('pattern library keeps a full web between every cutout', async () => {
 test('grid layout, clean splits and curated random rolls', async () => {
   const { randomStage, RECIPE_NAMES } = await import('../src/stagerandom.js');
   // grid: every whole lattice module is the same size
-  const grid = generateStage({ ...STAGE_DEFAULTS, layout: 'grid', module: 'flat', motif: 'solid', overlay: 0, subdivide: 0, erode: 0, petals: 0 }, DEFAULTS);
+  const grid = generateStage({ ...STAGE_DEFAULTS, layout: 'grid', module: 'flat', motif: 'solid', overlay: 0, subdivide: 0, erode: 0, petals: 0, zones: 1 }, DEFAULTS);
   const hexes = grid.parts.filter((p) => p.el === 'facade' && p.points.length === 6);
   assert.ok(hexes.length > 100);
   const areas = hexes.map((p) => Math.abs(p.points.reduce((s, q, i) => s + q[0] * p.points[(i + 1) % 6][1] - p.points[(i + 1) % 6][0] * q[1], 0)) / 2);

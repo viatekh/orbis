@@ -63,13 +63,18 @@ export function panelsMarkup(parts, cam, { mode, palette, mat, backlit, draft = 
     return { pt, d, etch, glow: pathOf(outline), lit, depth: outline.reduce((s, q) => s + q[2], 0) / outline.length };
   });
   items.sort((a, b) => a.depth - b.depth);
+  // depth haze: on a deep stage the far panels dim, so depth reads even from straight on
+  const zs = parts.map((pt) => world(pt, pt.points[0])[2]);
+  const [zLo, zHi] = [Math.min(...zs), Math.max(...zs)];
+  const haze = (pt) => (zHi - zLo < 500 ? 1 : 1 - Math.min(0.6, (zHi - zLo) / 6000) * (1 - (world(pt, pt.points[0])[2] - zLo) / (zHi - zLo)));
   let out = '';
   for (const { pt, d, etch, glow, lit } of items) {
-    const k = lit * (1 + 0.07 * (pt.layer || 0));
+    const fog = haze(pt);
+    const k = lit * (1 + 0.07 * (pt.layer || 0)) * fog;
     const color = paletteColor(palette, pt.t);
     if (mode === 'night') {
-      if (backlit && !draft) out += `<path d="${glow}" fill="${color}" fill-opacity="0.55"/>`;
-      out += `<path d="${d}" fill-rule="evenodd" fill="${shade('#141a21', k)}" stroke="${color}" stroke-width="1" ${ns}/>`;
+      if (backlit && !draft) out += `<path d="${glow}" fill="${color}" fill-opacity="${(0.55 * fog * fog).toFixed(2)}"/>`;
+      out += `<path d="${d}" fill-rule="evenodd" fill="${shade('#141a21', k)}" stroke="${color}" stroke-opacity="${fog.toFixed(2)}" stroke-width="1" ${ns}/>`;
     } else if (mode === 'day') {
       if (backlit && !draft) out += `<path d="${glow}" fill="#f6f2e6"/>`;
       out += `<path d="${d}" fill-rule="evenodd" fill="${shade(mat.fill, k * 0.92)}" stroke="${mat.edge}" stroke-width="0.8" ${ns}/>`;

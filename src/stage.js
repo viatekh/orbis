@@ -29,7 +29,7 @@ export const TENDRIL_STYLES = { horn: 'Horn', vine: 'Vine', feather: 'Feather' }
 const INHERIT = { inherit: 'Same as cell' };
 export const PIECE_MODULES = { ...INHERIT, ...MODULES };
 export const PIECE_MOTIFS = { ...INHERIT, ...MOTIFS };
-export const FORMS = { flat: 'Flat', dome: 'Dome', barrel: 'Barrel', cone: 'Cone', ripple: 'Ripple' };
+export const FORMS = { flat: 'Flat', funnel: 'Funnel', cone: 'Cone', dome: 'Dome', barrel: 'Barrel', ripple: 'Ripple' };
 export const PRINT_SETS = { none: 'Nothing', fit: 'Everything that fits', core: 'Core', petal: 'Petals', spike: 'Spikes', tendril: 'Tendrils' };
 export const STAGE_MATERIALS = ['birch', 'mdf', 'hdpe', 'aluminium'];
 
@@ -41,7 +41,6 @@ export const STAGE_GROUPS = [
   { id: 'tendril', label: 'Tendrils' },
   { id: 'facade', label: 'Panel Lattice' },
   { id: 'fret', label: 'Source Panel' },
-  { id: 'booth', label: 'DJ Booth' },
 ];
 
 export const STAGE_PARAMS = [
@@ -90,7 +89,9 @@ export const STAGE_PARAMS = [
   { key: 'subdivide', label: 'Subdivision', group: 'facade', min: 0, max: 1, step: 0.01, def: 0.2, rand: [0, 0.5] },
   { key: 'erode', label: 'Edge Erosion', group: 'facade', min: 0, max: 1, step: 0.01, def: 0.1, rand: [0, 0.5] },
 
-  { key: 'formDepth', label: 'Form Depth (m)', group: 'facade', min: -4, max: 4, step: 0.1, def: 1.5, rand: [-2.5, 2.5] },
+  { key: 'formDepth', label: 'Form Depth (m)', group: 'facade', min: -8, max: 8, step: 0.1, def: -3, rand: [-5, 5] },
+  { key: 'zones', label: 'Bands', group: 'facade', min: 1, max: 6, step: 1, def: 3, rand: [2, 5] },
+  { key: 'bandStep', label: 'Band Step (mm)', group: 'facade', min: -800, max: 800, step: 10, def: 250, rand: [-500, 500] },
 
   { key: 'depth', label: 'Relief Depth (mm)', group: 'fret', min: -600, max: 600, step: 10, def: 260, rand: [-350, 450] },
   { key: 'steps', label: 'Steps', group: 'fret', min: 1, max: 4, step: 1, def: 2, rand: [1, 3] },
@@ -99,7 +100,7 @@ export const STAGE_PARAMS = [
   { key: 'etch', label: 'Etch Lines', group: 'fret', min: 0, max: 3, step: 1, def: 1, rand: [0, 3] },
   { key: 'overlay', label: 'Raised Islands', group: 'fret', min: 0, max: 1, step: 0.01, def: 0.4, rand: [0, 0.8] },
 
-  { key: 'boothWidth', label: 'Booth Width (m)', group: 'booth', min: 0, max: 6, step: 0.1, def: 3, rand: [2, 4] },
+  { key: 'boothWidth', label: 'Booth Width (m)', group: 'booth', min: 0, max: 6, step: 0.1, def: 0, rand: null },
   { key: 'boothHeight', label: 'Booth Height (m)', group: 'booth', min: 0.8, max: 1.1, step: 0.05, def: 1.1, rand: null },
 ];
 export const STAGE_PARAM_MAP = Object.fromEntries(STAGE_PARAMS.map((p) => [p.key, p]));
@@ -120,7 +121,7 @@ export const STAGE_DEFAULTS = {
   module: 'stepped',
   motif: 'mixed',
   centre: 'disc',
-  form: 'flat',
+  form: 'funnel',
   petalShape: 'leaf',
   etchPattern: 'outline',
   tendrilStyle: 'horn',
@@ -154,7 +155,7 @@ export function normalizeStage(input = {}) {
 
 const FAB_LIMITS = { sheetW: [600, 4000], sheetH: [300, 2500], thickness: [3, 30], tool: [1, 20], printBed: [100, 2000], printThickness: [1, 30] };
 // Resize the whole design: sizes scale together, fabrication constants (sheet, bit, thickness) do not.
-const SCALED = ['width', 'discDiameter', 'lift', 'coreGap', 'discZ', 'discStep', 'sideDisc', 'sideOffset', 'petalLength', 'petalWidth', 'spikeStart', 'spikeLength', 'spikeWidth', 'tendrilLength', 'tendrilWidth', 'crownHeight', 'joint', 'formDepth', 'depth', 'rim', 'layerGap'];
+const SCALED = ['width', 'discDiameter', 'lift', 'coreGap', 'discZ', 'discStep', 'sideDisc', 'sideOffset', 'bandStep', 'petalLength', 'petalWidth', 'spikeStart', 'spikeLength', 'spikeWidth', 'tendrilLength', 'tendrilWidth', 'crownHeight', 'joint', 'formDepth', 'depth', 'rim', 'layerGap'];
 export function scaleStage(params, k) {
   const out = { ...params };
   for (const key of SCALED) out[key] = params[key] * k;
@@ -697,6 +698,7 @@ function makeLift(p, ctx) {
     dome: (x, y) => 1 - (x * x + y * y) / (R * R),
     barrel: (x) => 1 - (x * x) / (R * R),
     cone: (x, y) => 1 - Math.hypot(x, y) / R,
+    funnel: (x, y) => 1 - Math.sqrt(Math.min(1.6, Math.hypot(x, y) / R)), // steepens toward the centre, like a vortex
     ripple: (x, y) => 0.5 * Math.cos((Math.hypot(x, y) / R) * TAU * 1.5),
   }[p.form];
   const z = (x, y) => k * shape(x, y + ctx.cy);
@@ -758,6 +760,8 @@ function buildFacade(p, ctx, holes) {
   const rHole = p.centre === 'none' ? 0 : ctx.rInner + 60 + (p.petals ? Math.min(p.petalLength * M, L) * 0.3 : 0);
   const shift = p.seed % MIX.length;
   const parts = [];
+  const rIn = grid ? rHole : rBase;
+  const rOut = Math.min(rTop, rSide) * 0.95;
 
   // pass 1: which cells survive the silhouette, the erosion and the clipping
   const kept = [];
@@ -779,8 +783,8 @@ function buildFacade(p, ctx, holes) {
     if (holes.some((h) => [c, ...raw].some(([x, y]) => Math.hypot(Math.abs(x) - h.x, y - h.y) < h.r))) continue;
 
     let poly = clipHalf(raw, 0, 1, -(deckH + 30));
-    poly = clipHalf(clipHalf(poly, 1, 0, W / 2), -1, 0, W / 2);
-    if (poly.length < 3 || area(poly) < 0.45 * area(raw) || area(poly) < 6e4) continue;
+    if (raw.some(([x]) => Math.abs(x) > W / 2)) continue; // a module cut by the stage edge is just a fragment
+    if (poly.length < 3 || area(poly) < 0.6 * area(raw) || area(poly) < 6e4) continue;
     const keys = cell.verts.map(([u, v]) => `${Math.round(u * 50)},${Math.round(v * 50)}`);
     // cells on the centreline, against the core or standing on the deck are anchored
     const anchored = (p.mirror && raw.some(([x]) => Math.abs(x) < (grid ? gridS : 1) * 0.6 + 1)) || (!grid && cell.i === 0) || poly.length !== raw.length || raw.some(([, y]) => y > -(deckH + 30) - 1);
@@ -835,7 +839,11 @@ function buildFacade(p, ctx, holes) {
     const rollPick = rng();
     let motif = p.motif;
     if (motif === 'mixed') motif = rollMotif < p.chaos * 0.5 ? MIX[Math.floor(rollPick * MIX.length)] : MIX[(ring + shift) % MIX.length];
-    const module = p.module === 'mix' ? (ring % 2 ? 'stepped' : 'pyramid') : p.module;
+    // bands: concentric zones that step in depth and alternate module, so a big field has form
+    const band = Math.min(p.zones - 1, Math.floor((p.zones * Math.max(0, rc - rIn)) / Math.max(1, rOut - rIn)));
+    let module = p.module === 'mix' ? (ring % 2 ? 'stepped' : 'pyramid') : p.module;
+    if (band % 2) module = { stepped: 'pyramid', pyramid: 'stepped', flat: 'stepped' }[module] || module;
+    const zBand = band * p.bandStep;
     for (const piece of pieces) {
       const P = insetConvex(piece, p.joint / 2);
       const overlayRoll = rng();
@@ -843,7 +851,7 @@ function buildFacade(p, ctx, holes) {
       const pc = centroid(P);
       parts.push(
         ...modulePanels(P, {
-          module, motif, depth: p.depth, steps: p.steps, overlay: p.overlay, overlayRoll, z0: ctx.zOf('facade'), t, el: 'facade',
+          module, motif, depth: p.depth, steps: p.steps, overlay: p.overlay, overlayRoll, z0: ctx.zOf('facade') + zBand, t, el: 'facade',
           lift: ctx.lift, origin: [0, -cy], parity: ring % 2,
           opts: { ...ctx.fret, ang: Math.atan2(pc[1] + cy, pc[0]), parity: ring % 2, reserve: 0 },
         }),
@@ -1180,6 +1188,7 @@ function context(p, fab) {
     W: p.width * M,
     cy: deckH + p.lift * M + D / 2,
     rBase: rInner + 100 + p.joint + petalLen * 0.55,
+    latticeOn: p.tiling !== 'none' && !p.hidden.includes('facade'),
     zOf: (el) => p.layerOrder.indexOf(el) * p.layerGap,
     show: (el) => !p.hidden.includes(el),
   };
@@ -1254,7 +1263,7 @@ export function generateStage(input, discParams = DEFAULTS, fabInput = {}) {
     }
   }
 
-  const latticeOn = p.tiling !== 'none' && ctx.show('facade');
+  const latticeOn = ctx.latticeOn;
   const facade = latticeOn ? buildFacade(p, ctx, holes) : [];
   if (latticeOn && !facade.length) notes.push('No room for the panel lattice: widen the stage, raise the crown or shrink the centre.');
   const petals = ctx.show('petal') ? buildPetals(p, ctx) : [];
