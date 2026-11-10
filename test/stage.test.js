@@ -255,3 +255,53 @@ test('grid layout, clean splits and curated random rolls', async () => {
     }
   }
 });
+
+test('ribbons: curved parts keep their cutouts inside, apart, and on a sheet', async () => {
+  const { RIBBON_MOTIFS } = await import('../src/ribbon.js');
+  const seg = (x, y, a, b) => {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t);
+  };
+  const toPoly = (x, y, Q) => Math.min(...Q.map((a, i) => seg(x, y, a, Q[(i + 1) % Q.length])));
+  const inside = (x, y, Q) => {
+    let c = false;
+    for (let i = 0, j = Q.length - 1; i < Q.length; j = i++) {
+      if (Q[i][1] > y !== Q[j][1] > y && x < ((Q[j][0] - Q[i][0]) * (y - Q[i][1])) / (Q[j][1] - Q[i][1]) + Q[i][0]) c = !c;
+    }
+    return c;
+  };
+  for (const ribbonMotif of Object.keys(RIBBON_MOTIFS)) {
+    for (const tendrilStyle of Object.keys(TENDRIL_STYLES)) {
+      const stage = generateStage({ ...STAGE_DEFAULTS, tiling: 'none', tendrils: 4, tendrilStyle, ribbonMotif, tendrilCurl: 0.7, petalCurl: 0.6, spikes: 10, spikeCurl: 0.7, overlay: 0.6, detail: 1 }, DEFAULTS);
+      const organic = stage.parts.filter((p) => p.organic);
+      assert.ok(organic.length >= 20, `${tendrilStyle}/${ribbonMotif} builds curved parts`);
+      assert.ok(['tendril', 'petal', 'spike'].every((el) => organic.some((p) => p.el === el)));
+      assert.equal(stageJob(stage).oversize, 0, `${tendrilStyle}/${ribbonMotif} fits its sheets`);
+      if (ribbonMotif !== 'solid') assert.ok(organic.some((p) => p.cuts.length + p.holes.length > 0), ribbonMotif);
+      let edge = Infinity;
+      let web = Infinity;
+      for (const p of organic) {
+        for (const cut of p.cuts) {
+          for (const [x, y] of cut) {
+            assert.ok(inside(x, y, p.points), `${tendrilStyle}/${ribbonMotif} cut leaves part ${p.id}`);
+            edge = Math.min(edge, toPoly(x, y, p.points));
+          }
+        }
+        for (const h of p.holes) {
+          assert.ok(inside(h.x, h.y, p.points));
+          edge = Math.min(edge, toPoly(h.x, h.y, p.points) - h.r);
+        }
+        p.cuts.forEach((A, i) => {
+          for (const B of p.cuts.slice(i + 1)) for (const [P, Q] of [[A, B], [B, A]]) for (const [x, y] of P) web = Math.min(web, toPoly(x, y, Q));
+        });
+        p.holes.forEach((a, i) => {
+          for (const b of p.holes.slice(i + 1)) web = Math.min(web, Math.hypot(a.x - b.x, a.y - b.y) - a.r - b.r);
+        });
+      }
+      assert.ok(edge > 24, `${tendrilStyle}/${ribbonMotif}: ${edge.toFixed(1)} mm from cut to edge`);
+      assert.ok(web > 24, `${tendrilStyle}/${ribbonMotif}: ${web.toFixed(1)} mm between cuts`);
+    }
+  }
+});

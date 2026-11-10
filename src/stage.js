@@ -1236,7 +1236,8 @@ export function sourcePanels(input, fabInput = {}, only = null) {
   const ctx = context(p, normalizeStageFab(fabInput));
   ETCH = { n: p.etch, pattern: p.etchPattern };
   const want = (k) => !only || only === k;
-  const out = { cell: [], petal: [], spike: [], core: [] };
+  const out = { cell: [], petal: [], spike: [], core: [], tendril: [] };
+  const flatCtx = { ...ctx, lift: FLAT_LIFT, deckH: -1e7 };
   const opts = { ...ctx.fret, ang: Math.PI / 2, parity: 0, reserve: 0 };
   if (want('cell')) {
     const HEX = [0, 1, 2, 3, 4, 5].map((i) => [520 * Math.sin((i * Math.PI) / 3), -520 * Math.cos((i * Math.PI) / 3)]);
@@ -1250,14 +1251,24 @@ export function sourcePanels(input, fabInput = {}, only = null) {
     const len = Math.min(p.petalLength * M, ctx.L);
     const up = petalShape(len, Math.min(p.petalWidth * M, ctx.S), p.petalAsym, p.petalShape, p.petalNodes).map(([x, y]) => [y, len / 2 - x]);
     const step = Math.max(40, Math.abs(p.depth) * 0.35);
-    out.petal = petalLayers(up, p, ctx, 0.35).map(({ z, ...rest }) => ({ ...rest, frame: flatFrame(z * step) }));
+    out.petal = p.petalCurl
+      ? curledPetal(p, flatCtx, [0, len / 2], -Math.PI / 2, len, Math.min(p.petalWidth * M, ctx.S)).map(({ z, ...rest }) => ({ ...rest, frame: flatFrame(z * step) }))
+      : petalLayers(up, p, ctx, 0.35).map(({ z, ...rest }) => ({ ...rest, frame: flatFrame(z * step) }));
+  }
+  if (want('tendril')) {
+    // one tendril on its own, rising from the bottom of the preview
+    const one = { ...p, tendrils: 1, tendrilFrom: 0, tendrilSweep: 0, mirror: false, tendrilLength: Math.min(p.tendrilLength, 6) };
+    out.tendril = buildTendrils(one, { ...flatCtx, cy: 0, rBase: 0, zOf: () => 0 });
   }
   if (want('spike')) {
     const len = Math.min(p.spikeLength * M, ctx.L);
     const w = Math.min(p.spikeWidth * M, ctx.S);
     const module = own(p, 'spike', 'Module');
     const motif = own(p, 'spike', 'Motif');
-    out.spike = modulePanels([[0, len / 2], [w / 2, len * 0.2], [0, -len / 2], [-w / 2, len * 0.2]], {
+    if (p.spikeCurl) {
+      const spine = makeSpine({ start: [0, len / 2], heading: -Math.PI / 2, length: len, turn: (u) => p.spikeCurl * 1.7 * u ** 1.3 + 0.35 * p.spikeCurl * Math.sin(u * TAU) });
+      out.spike = placeRibbon(ribbonParts(spine, widthOf(RIBBON_PROFILES.flame, w, 0.25), ribbonOpts(p, flatCtx)), flatCtx, { z: 0, el: 'spike', t: 0.9 });
+    } else out.spike = modulePanels([[0, len / 2], [w / 2, len * 0.2], [0, -len / 2], [-w / 2, len * 0.2]], {
       module: module === 'scales' ? 'flat' : module, motif: motif === 'mixed' ? 'louvre' : motif, depth: p.depth * 0.6, steps: 1,
       overlay: 0, overlayRoll: 1, z0: 0, t: 0.9, el: 'spike', opts: { ...opts, parity: 1 },
     });

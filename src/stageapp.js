@@ -6,7 +6,7 @@ import { MATERIALS } from './fabrication.js';
 import { jobSVG, jobDXF } from './export.js';
 import { zip } from './zip.js';
 import {
-  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, TILINGS, LAYOUTS, MODULES, MOTIFS, CENTRES, FORMS, PRINT_SETS, PETAL_SHAPES, PIECE_MODULES, PIECE_MOTIFS, LAYERS, ETCH_PATTERNS, TENDRIL_STYLES, STAGE_MATERIALS, scaleStage,
+  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, TILINGS, LAYOUTS, MODULES, MOTIFS, CENTRES, FORMS, PRINT_SETS, PETAL_SHAPES, PIECE_MODULES, PIECE_MOTIFS, LAYERS, ETCH_PATTERNS, TENDRIL_STYLES, RIBBON_MOTIFS, STAGE_MATERIALS, scaleStage,
   normalizeStage, normalizeStageFab, generateStage, sourcePanels,
 } from './stage.js';
 import { stageJob, checkStage, settingOutCSV, printFiles } from './stagefab.js';
@@ -301,8 +301,9 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
   // Each piece has its own options; the galleries show what every option does to that piece.
   const PIECES = {
     cell: { note: 'The lattice cell. Every panel in the lattice is spawned from it.', galleries: [['module', 'Module', MODULES], ['motif', 'Fretwork', MOTIFS]] },
-    petal: { note: 'One petal; the ring repeats it. Length, width, lean and layers are under Petal Ring.', galleries: [['petalShape', 'Shape', PETAL_SHAPES], ['petalMotif', 'Fretwork', PIECE_MOTIFS]] },
+    petal: { note: 'One petal; the ring repeats it. Length, width, lean, curl and layers are under Petal Ring. A curled petal takes its cutouts from Curved-part cutouts.', galleries: [['petalShape', 'Shape', PETAL_SHAPES], ['petalMotif', 'Fretwork (straight petals)', PIECE_MOTIFS], ['ribbonMotif', 'Curved-part cutouts', RIBBON_MOTIFS]] },
     spike: { note: 'One spike. Set how many under Spikes.', galleries: [['spikeModule', 'Module', PIECE_MODULES], ['spikeMotif', 'Fretwork', PIECE_MOTIFS]] },
+    tendril: { note: 'One tendril: a curved part cut in sheet-sized lengths. Count, length, curl and fan angles are under Tendrils.', galleries: [['tendrilStyle', 'Style', TENDRIL_STYLES], ['ribbonMotif', 'Curved-part cutouts', RIBBON_MOTIFS]] },
     core: { note: 'The centre piece; side medallions copy it.', galleries: [['centre', 'Core', CENTRES], ['coreModule', 'Module', PIECE_MODULES], ['coreMotif', 'Fretwork', PIECE_MOTIFS]] },
   };
   const srcLook = () => ({ mode: state.mode, ...look(), backlit: state.params.backlit });
@@ -311,7 +312,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     const piece = PIECES[state.src];
     document.querySelectorAll('#srcTabs button').forEach((b) => b.classList.toggle('on', b.dataset.src === state.src));
     const parts = sourcePanels(state.params, state.fab, state.src)[state.src];
-    const off = (state.src === 'petal' && !state.params.petals) || (state.src === 'spike' && !state.params.spikes);
+    const off = (state.src === 'petal' && !state.params.petals) || (state.src === 'spike' && !state.params.spikes) || (state.src === 'tendril' && !state.params.tendrils);
     $('#sourceView').innerHTML = sourceSVG(parts, srcLook());
     $('#srcNote').textContent = off ? `${piece.note} None are on the stage yet.` : parts.length ? piece.note : 'No core: the stage has a void or nothing at its centre.';
     renderFreeEditor();

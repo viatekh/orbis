@@ -100,6 +100,11 @@ export function ribbonParts(spine, half, o) {
     const i = Math.min(n - 1, Math.floor(f));
     return lerp(arr[i], arr[i + 1], f - i);
   };
+  // a shape given in ribbon coordinates, with each edge followed along the curve
+  const shape = (corners, side = 1) => corners.flatMap(([sA, dA], i) => {
+    const [sB, dB] = corners[(i + 1) % corners.length];
+    return [0, 1, 2, 3].map((j) => P(lerp(sA, sB, j / 4), side * lerp(dA, dB, j / 4)));
+  });
   const rim = Math.max(o.rim, o.web);
   const motif = o.motif || 'vein';
   const out = [];
@@ -124,7 +129,7 @@ export function ribbonParts(spine, half, o) {
       narrow = Math.min(narrow, wl[i] + wr[i]);
     }
     // on the inside of a bend, distances along the ribbon shrink: widen the webs to compensate
-    const squeeze = Math.max(0.4, 1 - kMax * widest);
+    const squeeze = Math.max(0.2, 1 - kMax * widest);
     const webS = o.web / squeeze;
     const room = (s, side) => W(side > 0 ? wl : wr, s) - rim; // how far a cut may reach on that side
 
@@ -141,7 +146,10 @@ export function ribbonParts(spine, half, o) {
       } else if (motif === 'eyes') {
         let s = s0;
         while (s < s1) {
-          const r = Math.min(room(s, 1), room(s, -1), 260) * 0.92;
+          let r = Math.min(room(s, 1), room(s, -1), 260);
+          // the hole must clear the rim along its whole length, not just where it starts
+          for (let it = 0; it < 4; it++) r = Math.min(r, room(s + r, 1), room(s + r, -1), room(s + 2 * r, 1) + r * 0.5, room(s + 2 * r, -1) + r * 0.5);
+          r *= 0.92;
           if (r < o.minHoleR) { s += ds; continue; }
           const c = P(s + r, 0);
           if (s + 2 * r <= s1) holes.push({ x: c[0], y: c[1], r: r * Math.min(1, squeeze + 0.25), kind: 'bubble' });
@@ -151,26 +159,31 @@ export function ribbonParts(spine, half, o) {
         const slot = Math.max(o.minSlot, lerp(110, 46, o.detail));
         for (let s = s0; s + slot <= s1; s += slot + webS) {
           const q = [[s, 1], [s + slot, 1], [s + slot, -1], [s, -1]].map(([ss, side]) => [ss, side * Math.max(0, room(ss, side))]);
-          if (Math.min(q[0][1] - q[3][1], q[1][1] - q[2][1]) >= o.minSlot) cuts.push(q.map(([ss, d]) => P(ss, d)));
+          if (Math.min(q[0][1] - q[3][1], q[1][1] - q[2][1]) >= o.minSlot) cuts.push(shape(q));
         }
       } else if (motif === 'lanes') {
         // long lens-shaped slots that follow the curve, staggered lane to lane
-        const span = (s) => room(s, 1) + room(s, -1);
+        const span = (s) => Math.max(0, room(s, 1)) + Math.max(0, room(s, -1));
         const mid = (s0 + s1) / 2;
         const lanes = clamp(Math.floor((span(mid) + o.web) / (Math.max(o.minSlot, 60) + o.web)), 1, 1 + Math.round(o.detail * 2));
         const len = clamp(widest * 2.6, 260, 760);
         for (let l = 0; l < lanes; l++) {
           for (let s = s0 + (l % 2 ? len / 2 : 0); s + len * 0.6 <= s1; s += len + webS) {
-            const e = Math.min(s + len, s1);
+            let e = Math.min(s + len, s1);
+            // only run the slot where the ribbon is wide enough to hold it
+            let b0 = s;
+            while (b0 < e && span(b0) < o.minSlot * 1.5) b0 += ds / 2;
+            while (e > b0 && span(e) < o.minSlot * 1.5) e -= ds / 2;
+            if (e - b0 < o.minSlot * 3) continue;
             const hi = [];
             const lo = [];
-            const steps = Math.max(6, Math.round((e - s) / ds));
+            const steps = Math.max(6, Math.round((e - b0) / ds));
             let wide = 0;
             for (let j = 0; j <= steps; j++) {
-              const ss = lerp(s, e, j / steps);
+              const ss = lerp(b0, e, j / steps);
               const full = span(ss);
-              const lane = (full - (lanes - 1) * o.web) / lanes;
-              const base = -room(ss, -1) + l * (lane + o.web);
+              const lane = Math.max(0, (full - (lanes - 1) * o.web) / lanes);
+              const base = -Math.max(0, room(ss, -1)) + l * (lane + o.web);
               const bulge = Math.sin((Math.PI * j) / steps) ** 0.6; // pointed ends
               const c = base + lane / 2;
               const hw = Math.max(0, (lane / 2) * bulge);
@@ -195,7 +208,7 @@ export function ribbonParts(spine, half, o) {
             const q = [[s, rib], [s + slot, rib], [s + slot + rake * (reach - rib), reach], [s + rake * (reach - rib), reach]];
             // the raked outer end must still be inside the rim where it lands
             const ok = q.every(([ss, d]) => ss >= s0 - 1 && ss <= s1 + 1 && d <= room(ss, side) + 0.5);
-            if (ok) cuts.push(q.map(([ss, d]) => P(ss, side * d)));
+            if (ok) cuts.push(shape(q, side));
           }
         }
       }
