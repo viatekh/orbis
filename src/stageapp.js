@@ -6,7 +6,7 @@ import { MATERIALS } from './fabrication.js';
 import { jobSVG, jobDXF } from './export.js';
 import { zip } from './zip.js';
 import {
-  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, TILINGS, MODULES, MOTIFS, CENTRES, FORMS, PRINT_SETS, PETAL_SHAPES, PIECE_MODULES, PIECE_MOTIFS, STAGE_MATERIALS,
+  STAGE_PARAMS, STAGE_PARAM_MAP, STAGE_GROUPS, STAGE_DEFAULTS, TILINGS, MODULES, MOTIFS, CENTRES, FORMS, PRINT_SETS, PETAL_SHAPES, PIECE_MODULES, PIECE_MOTIFS, LAYERS, ETCH_PATTERNS, TENDRIL_STYLES, STAGE_MATERIALS, scaleStage,
   normalizeStage, normalizeStageFab, generateStage, sourcePanels,
 } from './stage.js';
 import { stageJob, checkStage, settingOutCSV, printFiles } from './stagefab.js';
@@ -16,6 +16,7 @@ import { elevationSVG, elevationBox, skyColor, sourceSVG, STAGE_MODES } from './
 const $ = (sel) => document.querySelector(sel);
 const KEY = 'orbis.stage';
 const MODE_KEY = 'orbis.workspace';
+const UI_KEY = 'orbis.stage.ui';
 
 const read = (key, fallback) => {
   try {
@@ -45,6 +46,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     cam: { yaw: 0, pitch: 0 },
     view: null, // zoomed viewBox, or null for the whole stage
     src: 'cell',
+    ui: { linked: false, customize: false, hiddenControls: [], ...read(UI_KEY, {}) },
   };
   const inputs = {};
 
@@ -76,17 +78,23 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
       row.className = 'param';
       row.innerHTML = `<label for="sp-${def.key}">${def.label}</label>
         <input class="val" type="number" min="${def.min}" max="${def.max}" step="${def.step}" aria-label="${def.label} value" />
-        <span></span>
+        <button class="eye" title="Hide or show this control" aria-label="Hide ${def.label}">◉</button>
         <input id="sp-${def.key}" type="range" min="${def.min}" max="${def.max}" step="${def.step}" />`;
       const [num, range] = row.querySelectorAll('input');
       range.addEventListener('input', () => setParam(def.key, range.value));
       num.addEventListener('change', () => setParam(def.key, num.value));
-      inputs[def.key] = { num, range, def };
+      row.querySelector('.eye').addEventListener('click', () => {
+        const list = state.ui.hiddenControls;
+        state.ui.hiddenControls = list.includes(def.key) ? list.filter((k) => k !== def.key) : [...list, def.key];
+        write(UI_KEY, state.ui);
+        sync();
+      });
+      inputs[def.key] = { num, range, def, row };
       det.appendChild(row);
     }
     host.appendChild(det);
   }
-  const SELECTS = { tiling: TILINGS, form: FORMS };
+  const SELECTS = { tiling: TILINGS, form: FORMS, etchPattern: ETCH_PATTERNS, tendrilStyle: TENDRIL_STYLES };
   const CHECKS = ['mirror', 'backlit', 'truss'];
   for (const [key, set] of Object.entries(SELECTS)) {
     $(`#st-${key}`).innerHTML = Object.entries(set).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
@@ -98,7 +106,11 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
   $('#stageModeSeg').innerHTML = Object.entries(STAGE_MODES).map(([k, v]) => `<button data-smode="${k}">${v}</button>`).join('');
 
   const sync = () => {
-    for (const { num, range, def } of Object.values(inputs)) {
+    host.parentElement.classList.toggle('customizing', state.ui.customize);
+    $('#st-linked').checked = state.ui.linked;
+    $('#st-customize').checked = state.ui.customize;
+    for (const { num, range, def, row } of Object.values(inputs)) {
+      row.classList.toggle('hid', state.ui.hiddenControls.includes(def.key));
       const v = state.params[def.key];
       range.value = v;
       if (document.activeElement !== num) num.value = v;
@@ -122,6 +134,11 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
   };
 
   function setParam(key, value) {
+    if (key === 'width' && state.ui.linked && Number(value) > 0) {
+      // resize the whole design, then pin the width to exactly what was asked for
+      state.params = normalizeStage({ ...scaleStage(state.params, Number(value) / state.params.width), width: Number(value) });
+      return render();
+    }
     state.params = normalizeStage({ ...state.params, [key]: STAGE_PARAM_MAP[key] ? Number(value) : value });
     render();
   }
@@ -155,6 +172,57 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     state.mode = b.dataset.smode;
     render();
   });
+  for (const key of ['linked', 'customize']) {
+    $(`#st-${key}`).addEventListener('change', (e) => {
+      state.ui[key] = e.target.checked;
+      write(UI_KEY, state.ui);
+      sync();
+    });
+  }
+
+  // ------------------------------------------------------------ layers
+  // Order sets each element's stand-off (Layer Spacing apart); the eye removes it from the build.
+  let dragLayer = null;
+  function renderLayers() {
+    const host = $('#stageLayers');
+    host.innerHTML = '';
+    const order = state.params.layerOrder.slice().reverse(); // front first
+    const move = (el, to) => {
+      const next = order.filter((k) => k !== el);
+      next.splice(Math.max(0, Math.min(next.length, to)), 0, el);
+      state.params = normalizeStage({ ...state.params, layerOrder: next.reverse() });
+      render();
+    };
+    order.forEach((el, i) => {
+      const li = document.createElement('li');
+      const off = state.params.hidden.includes(el);
+      li.draggable = true;
+      li.classList.toggle('off', off);
+      li.innerHTML = `<span class="grip" aria-hidden="true">⋮⋮</span><span>${LAYERS[el]}</span><button data-act="up" aria-label="Bring ${LAYERS[el]} forward">↑</button><button data-act="down" aria-label="Send ${LAYERS[el]} back">↓</button><button data-act="eye" aria-label="${off ? 'Show' : 'Hide'} ${LAYERS[el]}">${off ? 'show' : 'hide'}</button>`;
+      li.addEventListener('click', (e) => {
+        const act = e.target.dataset.act;
+        if (act === 'up') move(el, i - 1);
+        if (act === 'down') move(el, i + 1);
+        if (act === 'eye') {
+          state.params = normalizeStage({ ...state.params, hidden: off ? state.params.hidden.filter((k) => k !== el) : [...state.params.hidden, el] });
+          render();
+        }
+      });
+      li.addEventListener('dragstart', () => (dragLayer = el));
+      li.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        li.classList.add('over');
+      });
+      li.addEventListener('dragleave', () => li.classList.remove('over'));
+      li.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (dragLayer && dragLayer !== el) move(dragLayer, i);
+        dragLayer = null;
+      });
+      host.appendChild(li);
+    });
+  }
+
   $('#btnStageRandom').addEventListener('click', () => {
     const next = { ...state.params };
     for (const def of STAGE_PARAMS) if (def.rand) next[def.key] = quantize(def, def.rand[0] + Math.random() * (def.rand[1] - def.rand[0]));
@@ -189,6 +257,7 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     state.job = null;
     $('#elevation').innerHTML = elevation(state.mode, state.cam, false, state.view);
     renderSource();
+    renderLayers();
     const box = elevationBox(state.stage);
     const frame = $('#elevation').parentElement;
     frame.style.aspectRatio = `${Math.round(box.w)} / ${Math.round(box.h)}`;
@@ -246,8 +315,49 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
     const off = (state.src === 'petal' && !state.params.petals) || (state.src === 'spike' && !state.params.spikes);
     $('#sourceView').innerHTML = sourceSVG(parts, srcLook());
     $('#srcNote').textContent = off ? `${piece.note} None are on the stage yet.` : parts.length ? piece.note : 'No core: the stage has a void or nothing at its centre.';
+    renderFreeEditor();
     clearTimeout(galleryTimer);
     galleryTimer = setTimeout(renderGalleries, 250);
+  }
+  // Freeform petal: drag the five handles to set the half-width along the petal.
+  function renderFreeEditor() {
+    const host = $('#freeEditor');
+    const on = state.src === 'petal' && state.params.petalShape === 'freeform';
+    host.hidden = !on;
+    if (!on || host.dataset.dragging) return;
+    const W = 240;
+    const H = 150;
+    const x = (i) => 20 + ((i + 1) / 6) * (W - 40);
+    const y = (w) => H - 14 - w * (H - 34);
+    const nodes = state.params.petalNodes;
+    const line = [[20, y(0)], ...nodes.map((w, i) => [x(i), y(w)]), [W - 20, y(0)]].map((q) => q.join(' ')).join('L');
+    host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Petal width editor"><path d="M20 ${y(0)}H${W - 20}" stroke="#39424a" stroke-width="1"/><path d="M${line}" fill="none" stroke="#9a6bff" stroke-width="1.5"/>${nodes.map((w, i) => `<circle data-i="${i}" cx="${x(i)}" cy="${y(w)}" r="7" fill="#f0561a"/>`).join('')}<text x="20" y="12" fill="#8e9b96" font-size="9" font-family="monospace">base → tip · drag to shape</text></svg>`;
+    const svg = host.querySelector('svg');
+    let active = null;
+    svg.addEventListener('pointerdown', (e) => {
+      if (e.target.dataset.i === undefined) return;
+      active = Number(e.target.dataset.i);
+      host.dataset.dragging = '1';
+      svg.setPointerCapture(e.pointerId);
+    });
+    svg.addEventListener('pointermove', (e) => {
+      if (active === null) return;
+      const r = svg.getBoundingClientRect();
+      const w = Math.min(1, Math.max(0.05, (H - 14 - ((e.clientY - r.top) / r.height) * H) / (H - 34)));
+      const next = state.params.petalNodes.slice();
+      next[active] = w;
+      state.params = normalizeStage({ ...state.params, petalNodes: next });
+      svg.querySelector(`circle[data-i="${active}"]`).setAttribute('cy', y(state.params.petalNodes[active]));
+      $('#sourceView').innerHTML = sourceSVG(sourcePanels(state.params, state.fab, 'petal').petal, srcLook());
+    });
+    const end = () => {
+      if (active === null) return;
+      active = null;
+      delete host.dataset.dragging;
+      render();
+    };
+    svg.addEventListener('pointerup', end);
+    svg.addEventListener('pointercancel', end);
   }
   function renderGalleries() {
     const host = $('#srcGalleries');

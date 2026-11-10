@@ -160,6 +160,8 @@
       <div class="fields">
         <label class="f"><span>Tiling</span><select id="st-tiling"></select></label>
         <label class="f"><span>Form</span><select id="st-form"></select></label>
+        <label class="f"><span>Etch detail</span><select id="st-etchPattern"></select></label>
+        <label class="f"><span>Tendrils</span><select id="st-tendrilStyle"></select></label>
       </div>
       <div class="sub source-editor">
         <h3>Source pieces</h3>
@@ -167,13 +169,20 @@
           <button data-src="cell">Cell</button><button data-src="petal">Petal</button><button data-src="spike">Spike</button><button data-src="core">Core</button>
         </div>
         <div class="source-view" id="sourceView"></div>
+        <div class="free-editor" id="freeEditor" hidden></div>
         <p class="note" id="srcNote"></p>
         <div id="srcGalleries"></div>
+      </div>
+      <div class="sub">
+        <h3>Layers <span class="legend">front at top · drag to reorder</span></h3>
+        <ul class="layers" id="stageLayers"></ul>
       </div>
       <div class="checks-row">
         <label class="check"><input type="checkbox" id="st-mirror" /> Mirror</label>
         <label class="check"><input type="checkbox" id="st-backlit" /> Backlit</label>
         <label class="check"><input type="checkbox" id="st-truss" /> Truss</label>
+        <label class="check" title="Changing Stage Width resizes everything in proportion. Sheet, bit and thickness stay fixed."><input type="checkbox" id="st-linked" /> Scale together</label>
+        <label class="check" title="Show an eye on every control so you can hide the ones you never use"><input type="checkbox" id="st-customize" /> Hide controls</label>
       </div>
       <button id="btnEditDisc" title="Medallions use your current Disc design">Edit medallion design in Disc →</button>
       <div id="stageControls"></div>

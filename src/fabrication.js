@@ -220,7 +220,7 @@ export function buildJob(rawDesign, fab) {
   const job = {
     inner: { polys: [], circles: [] },
     cut: { polys: [], circles: [] },
-    engrave: { arcs: [], polys: [], dots: [] },
+    engrave: { arcs: [], polys: [], dots: [], lines: [] },
     labels: [],
     guides: [],
     notes: [],
@@ -311,6 +311,7 @@ function jobStats(job) {
   let engrave = 0;
   for (const a of job.engrave.arcs) engrave += a.r * (a.a1 - a.a0);
   for (const p of job.engrave.polys) engrave += perimeter(p);
+  for (const l of job.engrave.lines || []) engrave += Math.hypot(l[1][0] - l[0][0], l[1][1] - l[0][1]);
   for (const d of job.engrave.dots) engrave += TAU * d.r;
   return { cutLengthMm: cut, engraveLengthMm: engrave, pierces };
 }
@@ -471,6 +472,7 @@ function packSheets(design, fab, k, job, labelSize) {
       }
       for (const c of it.p.cuts || []) job.inner.polys.push(c.map(tf));
       for (const e of it.p.etch || []) job.engrave.polys.push(e.map(tf));
+      for (const e of it.p.etchLines || []) job.engrave.lines.push(e.map(tf));
       if (fab.labels) {
         const [lx, ly] = tf(it.p.label);
         job.labels.push({ x: lx, y: ly, text: it.p.id, size: labelSize });

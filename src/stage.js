@@ -18,13 +18,16 @@ const DISC_REF = 1000; // the disc is generated at this diameter, then scaled
 export const TILINGS = { hex: 'Hex', diamond: 'Diamond', shard: 'Shard', brick: 'Brick', none: 'None' };
 export const MODULES = { stepped: 'Stepped', pyramid: 'Folded', scales: 'Scales', flat: 'Flat' };
 export const MOTIFS = { mixed: 'Mixed', window: 'Window', slots: 'Nested slots', fan: 'Fan', rays: 'Slat fan', louvre: 'Louvre', perf: 'Perforated', solid: 'Solid' };
-export const CENTRES = { disc: 'Ring disc', iris: 'Iris', star: 'Star', rosette: 'Rosette', opening: 'Void', none: 'No core' };
-export const PETAL_SHAPES = { leaf: 'Leaf', eye: 'Eye', teardrop: 'Teardrop', diamond: 'Diamond', blade: 'Blade' };
+export const CENTRES = { disc: 'Ring disc', iris: 'Iris', star: 'Star', rosette: 'Rosette', mandala: 'Mandala', opening: 'Void', none: 'No core' };
+export const PETAL_SHAPES = { leaf: 'Leaf', eye: 'Eye', teardrop: 'Teardrop', diamond: 'Diamond', blade: 'Blade', freeform: 'Freeform' };
+export const LAYERS = { spike: 'Spikes', tendril: 'Tendrils', facade: 'Lattice', petal: 'Petals', core: 'Core' };
+export const ETCH_PATTERNS = { outline: 'Outline', voronoi: 'Voronoi', hatch: 'Hatch', grid: 'Grid', rings: 'Rings' };
+export const TENDRIL_STYLES = { horn: 'Horn', vine: 'Vine', feather: 'Feather' };
 const INHERIT = { inherit: 'Same as cell' };
 export const PIECE_MODULES = { ...INHERIT, ...MODULES };
 export const PIECE_MOTIFS = { ...INHERIT, ...MOTIFS };
 export const FORMS = { flat: 'Flat', dome: 'Dome', barrel: 'Barrel', cone: 'Cone', ripple: 'Ripple' };
-export const PRINT_SETS = { none: 'Nothing', fit: 'Everything that fits', core: 'Core', petal: 'Petals', spike: 'Spikes' };
+export const PRINT_SETS = { none: 'Nothing', fit: 'Everything that fits', core: 'Core', petal: 'Petals', spike: 'Spikes', tendril: 'Tendrils' };
 export const STAGE_MATERIALS = ['birch', 'mdf', 'hdpe', 'aluminium'];
 
 export const STAGE_GROUPS = [
@@ -32,6 +35,7 @@ export const STAGE_GROUPS = [
   { id: 'centre', label: 'Centre & Medallions' },
   { id: 'petal', label: 'Petal Ring' },
   { id: 'spike', label: 'Spikes' },
+  { id: 'tendril', label: 'Tendrils' },
   { id: 'facade', label: 'Panel Lattice' },
   { id: 'fret', label: 'Source Panel' },
   { id: 'booth', label: 'DJ Booth' },
@@ -44,11 +48,13 @@ export const STAGE_PARAMS = [
   { key: 'deckDepth', label: 'Deck Depth (m)', group: 'stage', min: 2, max: 12, step: 1, def: 6, rand: null },
   { key: 'chaos', label: 'Randomness', group: 'stage', min: 0, max: 1, step: 0.01, def: 0.35, rand: [0, 0.8] },
 
+  { key: 'layerGap', label: 'Layer Spacing (mm)', group: 'stage', min: 0, max: 600, step: 10, def: 140, rand: [60, 260] },
+
   { key: 'discDiameter', label: 'Centre Ø (m)', group: 'centre', min: 1, max: 8, step: 0.1, def: 3.2, rand: [2.4, 4.4] },
   { key: 'lift', label: 'Lift Above Deck (m)', group: 'centre', min: 0, max: 4, step: 0.1, def: 1.7, rand: [1.2, 2.4] },
   { key: 'corePoints', label: 'Core Points', group: 'centre', min: 5, max: 16, step: 1, def: 8, rand: [5, 12] },
   { key: 'coreGap', label: 'Core Gap (mm)', group: 'centre', min: 0, max: 1500, step: 10, def: 0, rand: [0, 500] },
-  { key: 'discZ', label: 'Core Stand-off (mm)', group: 'centre', min: 0, max: 800, step: 10, def: 300, rand: [150, 500] },
+  { key: 'discZ', label: 'Core Stand-off (mm)', group: 'centre', min: 0, max: 800, step: 10, def: 120, rand: [150, 500] },
   { key: 'discStep', label: 'Ring Step (mm)', group: 'centre', min: -150, max: 150, step: 5, def: 45, rand: [-80, 100] },
   { key: 'sideDisc', label: 'Side Medallion Ø (m)', group: 'centre', min: 0, max: 4, step: 0.1, def: 1.8, rand: [0, 2.6] },
   { key: 'sideOffset', label: 'Medallion Offset (m)', group: 'centre', min: 2, max: 12, step: 0.1, def: 6.2, rand: [4.5, 7] },
@@ -64,6 +70,12 @@ export const STAGE_PARAMS = [
   { key: 'spikeStart', label: 'Start Radius (m)', group: 'spike', min: 1, max: 10, step: 0.1, def: 3.4, rand: [2.6, 4.5] },
   { key: 'spikeLength', label: 'Length (m)', group: 'spike', min: 0.5, max: 2.3, step: 0.05, def: 2, rand: [1.2, 2.3] },
   { key: 'spikeWidth', label: 'Width (m)', group: 'spike', min: 0.15, max: 1.1, step: 0.05, def: 0.5, rand: [0.3, 0.8] },
+
+  { key: 'tendrils', label: 'Per Side', group: 'tendril', min: 0, max: 6, step: 1, def: 0, rand: [0, 4] },
+  { key: 'tendrilLength', label: 'Length (m)', group: 'tendril', min: 2, max: 10, step: 0.1, def: 6, rand: [4, 8] },
+  { key: 'tendrilCurl', label: 'Curl', group: 'tendril', min: -1, max: 1, step: 0.01, def: 0.55, rand: [-0.9, 0.9] },
+  { key: 'tendrilWidth', label: 'Base Width (m)', group: 'tendril', min: 0.2, max: 1.1, step: 0.05, def: 0.7, rand: [0.4, 1] },
+  { key: 'tendrilLeaves', label: 'Leaves / Barbs', group: 'tendril', min: 0, max: 1, step: 0.01, def: 0.7, rand: [0.3, 1] },
 
   { key: 'cells', label: 'Cells Around', group: 'facade', min: 10, max: 48, step: 2, def: 24, rand: [16, 30] },
   { key: 'stretch', label: 'Radial Stretch', group: 'facade', min: 0.6, max: 1.8, step: 0.05, def: 1, rand: [0.8, 1.4] },
@@ -91,6 +103,7 @@ export const STAGE_PARAM_MAP = Object.fromEntries(STAGE_PARAMS.map((p) => [p.key
 
 const CHOICES = {
   tiling: TILINGS, module: MODULES, motif: MOTIFS, centre: CENTRES, form: FORMS, petalShape: PETAL_SHAPES,
+  etchPattern: ETCH_PATTERNS, tendrilStyle: TENDRIL_STYLES,
   coreModule: PIECE_MODULES, coreMotif: PIECE_MOTIFS, spikeModule: PIECE_MODULES, spikeMotif: PIECE_MOTIFS, petalMotif: PIECE_MOTIFS,
 };
 // Each piece can follow the lattice cell or carry its own module and fretwork.
@@ -105,6 +118,11 @@ export const STAGE_DEFAULTS = {
   centre: 'disc',
   form: 'flat',
   petalShape: 'leaf',
+  etchPattern: 'outline',
+  tendrilStyle: 'horn',
+  layerOrder: Object.keys(LAYERS), // back to front
+  hidden: [],
+  petalNodes: [0.5, 0.9, 1, 0.7, 0.35], // freeform petal half-widths from base to tip
   coreModule: 'inherit',
   coreMotif: 'inherit',
   spikeModule: 'inherit',
@@ -120,10 +138,25 @@ export function normalizeStage(input = {}) {
   for (const def of STAGE_PARAMS) out[def.key] = quantize(def, input[def.key] ?? def.def);
   for (const [key, set] of Object.entries(CHOICES)) out[key] = set[input[key]] ? input[key] : STAGE_DEFAULTS[key];
   for (const key of FLAGS) out[key] = typeof input[key] === 'boolean' ? input[key] : STAGE_DEFAULTS[key];
+  const order = Array.isArray(input.layerOrder) ? input.layerOrder.filter((k, i, a) => LAYERS[k] && a.indexOf(k) === i) : [];
+  out.layerOrder = [...Object.keys(LAYERS).filter((k) => !order.includes(k)), ...order];
+  out.hidden = Array.isArray(input.hidden) ? Object.keys(LAYERS).filter((k) => input.hidden.includes(k)) : [];
+  out.petalNodes = STAGE_DEFAULTS.petalNodes.map((d, i) => {
+    const v = Number(Array.isArray(input.petalNodes) ? input.petalNodes[i] : d);
+    return Number.isFinite(v) ? Math.round(Math.min(1, Math.max(0.05, v)) * 100) / 100 : d;
+  });
   return out;
 }
 
 const FAB_LIMITS = { sheetW: [600, 4000], sheetH: [300, 2500], thickness: [3, 30], tool: [1, 20], printBed: [100, 2000], printThickness: [1, 30] };
+// Resize the whole design: sizes scale together, fabrication constants (sheet, bit, thickness) do not.
+const SCALED = ['width', 'discDiameter', 'lift', 'coreGap', 'discZ', 'discStep', 'sideDisc', 'sideOffset', 'petalLength', 'petalWidth', 'spikeStart', 'spikeLength', 'spikeWidth', 'tendrilLength', 'tendrilWidth', 'crownHeight', 'joint', 'formDepth', 'depth', 'rim', 'layerGap'];
+export function scaleStage(params, k) {
+  const out = { ...params };
+  for (const key of SCALED) out[key] = params[key] * k;
+  return normalizeStage(out);
+}
+
 export const STAGE_FAB_DEFAULTS = { sheetW: 2440, sheetH: 1220, thickness: 12, tool: 6, material: 'birch', labels: true, led: true, printBed: 245, printThickness: 4, printSet: 'none' };
 
 export function normalizeStageFab(input = {}) {
@@ -455,17 +488,122 @@ function labelSpot(P, cuts, holes, rim) {
   return best.pt;
 }
 
-// Etch-only detail: score lines that follow the outline inside the rim, so they never cross a cut.
-let ETCH_LINES = 0;
-function panel(P, fret, extra) {
-  const etch = [];
-  if (ETCH_LINES && extra.rim >= 36 && !extra.plain) {
-    for (let k = 1; k <= ETCH_LINES; k++) {
-      const line = insetConvex(P, (extra.rim * k) / (ETCH_LINES + 1));
-      if (line) etch.push(line);
+// Parameter interval of segment a→b that lies at least `margin` inside a convex polygon's edges.
+function insideInterval(a, b, edges, margin) {
+  let t0 = 0;
+  let t1 = 1;
+  for (const e of edges) {
+    const da = e.nx * a[0] + e.ny * a[1] - e.c - margin;
+    const db = e.nx * b[0] + e.ny * b[1] - e.c - margin;
+    if (da < 0 && db < 0) return null;
+    if (da < 0) t0 = Math.max(t0, da / (da - db));
+    else if (db < 0) t1 = Math.min(t1, da / (da - db));
+  }
+  return t1 - t0 > 1e-6 ? [t0, t1] : null;
+}
+
+// Etch-only detail: score lines on the solid parts of a panel. Every line is clipped
+// against the cutouts (with a margin), so nothing is engraved across an opening.
+let ETCH = { n: 0, pattern: 'outline' };
+const ETCH_GAP = 8;
+function etchDetail(P, fret, rim) {
+  const out = { etch: [], etchLines: [] };
+  if (!ETCH.n) return out;
+  if (ETCH.pattern === 'outline') {
+    if (rim < 36) return out;
+    for (let k = 1; k <= ETCH.n; k++) {
+      const line = insetConvex(P, (rim * k) / (ETCH.n + 1));
+      if (line) out.etch.push(line);
+    }
+    return out;
+  }
+  const Pin = insetConvex(P, Math.max(14, Math.min(rim, 40) * 0.4));
+  if (!Pin) return out;
+  const bounds = edgesOf(Pin);
+  const spacing = [0, 190, 120, 78][ETCH.n];
+  const segs = [];
+  const within = (a, b) => {
+    const iv = insideInterval(a, b, bounds, 0);
+    if (iv) segs.push([[a[0] + (b[0] - a[0]) * iv[0], a[1] + (b[1] - a[1]) * iv[0]], [a[0] + (b[0] - a[0]) * iv[1], a[1] + (b[1] - a[1]) * iv[1]]]);
+  };
+  const c = centroid(Pin);
+  const reach = Math.max(...Pin.map((q) => Math.hypot(q[0] - c[0], q[1] - c[1]))) + 10;
+  const hatch = (ang) => {
+    const d = [Math.cos(ang), Math.sin(ang)];
+    const n = [-d[1], d[0]];
+    for (let k = -Math.ceil(reach / spacing); k * spacing <= reach; k++) {
+      const m = [c[0] + n[0] * (k + 0.5) * spacing, c[1] + n[1] * (k + 0.5) * spacing];
+      within([m[0] - d[0] * reach, m[1] - d[1] * reach], [m[0] + d[0] * reach, m[1] + d[1] * reach]);
+    }
+  };
+  const edge0 = Math.atan2(P[1][1] - P[0][1], P[1][0] - P[0][0]);
+  if (ETCH.pattern === 'hatch') hatch(edge0 + Math.PI / 4);
+  else if (ETCH.pattern === 'grid') {
+    hatch(edge0 + Math.PI / 6);
+    hatch(edge0 - Math.PI / 6);
+  } else if (ETCH.pattern === 'rings') {
+    for (let d = spacing * 0.5; d < inradius(Pin); d += spacing * 0.6) {
+      const ring = insetConvex(Pin, d);
+      if (!ring) break;
+      ring.forEach((q, i) => segs.push([q, ring[(i + 1) % ring.length]]));
+    }
+  } else {
+    // voronoi: each pair of neighbouring sites shares one edge on their bisector
+    const rng = subRng('etch', Math.round(c[0]), Math.round(c[1]), P.length);
+    const count = clamp(Math.round(area(Pin) / (spacing * spacing * 1.5)), 3, 24);
+    const sites = [];
+    for (let tries = 0; sites.length < count && tries < count * 12; tries++) {
+      const q = [c[0] + (rng() * 2 - 1) * reach, c[1] + (rng() * 2 - 1) * reach];
+      if (insideBy(Pin, q[0], q[1]) > 0 && sites.every((o) => Math.hypot(o[0] - q[0], o[1] - q[1]) > spacing * 0.45)) sites.push(q);
+    }
+    for (let i = 0; i < sites.length; i++) {
+      for (let j = i + 1; j < sites.length; j++) {
+        const [si, sj] = [sites[i], sites[j]];
+        const m = [(si[0] + sj[0]) / 2, (si[1] + sj[1]) / 2];
+        const len = Math.hypot(sj[0] - si[0], sj[1] - si[1]);
+        const d = [-(sj[1] - si[1]) / len, (sj[0] - si[0]) / len];
+        // keep only the stretch that is nearer to these two sites than to any other
+        const closer = sites.filter((_, k) => k !== i && k !== j).map((sk) => {
+          const l = Math.hypot(sk[0] - si[0], sk[1] - si[1]);
+          const nx = -(sk[0] - si[0]) / l;
+          const ny = -(sk[1] - si[1]) / l;
+          return { nx, ny, c: nx * ((si[0] + sk[0]) / 2) + ny * ((si[1] + sk[1]) / 2) };
+        });
+        const a = [m[0] - d[0] * reach * 2, m[1] - d[1] * reach * 2];
+        const b = [m[0] + d[0] * reach * 2, m[1] + d[1] * reach * 2];
+        const iv = insideInterval(a, b, [...bounds, ...closer], 0);
+        if (iv) segs.push([[a[0] + (b[0] - a[0]) * iv[0], a[1] + (b[1] - a[1]) * iv[0]], [a[0] + (b[0] - a[0]) * iv[1], a[1] + (b[1] - a[1]) * iv[1]]]);
+      }
     }
   }
-  return { points: P, holes: fret.holes, cuts: fret.cuts, etch, label: labelSpot(P, fret.cuts, fret.holes, extra.rim), ...extra };
+  // remove the parts of each line that fall inside (or too near) a cutout
+  const cutEdges = fret.cuts.map(edgesOf);
+  for (const [a, b] of segs) {
+    let keep = [[0, 1]];
+    const remove = (iv) => {
+      if (iv) keep = keep.flatMap(([u, v]) => [[u, Math.min(v, iv[0])], [Math.max(u, iv[1]), v]].filter(([x, y]) => y - x > 1e-6));
+    };
+    for (const edges of cutEdges) remove(insideInterval(a, b, edges, -ETCH_GAP));
+    for (const h of fret.holes) {
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const fx = a[0] - h.x;
+      const fy = a[1] - h.y;
+      const A = dx * dx + dy * dy;
+      const B = 2 * (fx * dx + fy * dy);
+      const disc = B * B - 4 * A * (fx * fx + fy * fy - (h.r + ETCH_GAP) ** 2);
+      if (disc > 0) remove([Math.max(0, (-B - Math.sqrt(disc)) / (2 * A)), Math.min(1, (-B + Math.sqrt(disc)) / (2 * A))]);
+    }
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    for (const [u, v] of keep) {
+      if ((v - u) * len > 25) out.etchLines.push([[a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u], [a[0] + (b[0] - a[0]) * v, a[1] + (b[1] - a[1]) * v]]);
+    }
+  }
+  return out;
+}
+
+function panel(P, fret, extra) {
+  return { points: P, holes: fret.holes, cuts: fret.cuts, ...etchDetail(P, fret, extra.rim), label: labelSpot(P, fret.cuts, fret.holes, extra.rim), ...extra };
 }
 
 // ------------------------------------------------------------------ modules
@@ -650,7 +788,7 @@ function buildFacade(p, ctx, holes) {
       if (motif === 'mixed') motif = rollMotif < p.chaos * 0.5 ? MIX[Math.floor(rollPick * MIX.length)] : MIX[(cell.i + shift) % MIX.length];
       parts.push(
         ...modulePanels(P, {
-          module: p.module, motif, depth: p.depth, steps: p.steps, overlay: p.overlay, overlayRoll, z0: 0, t, el: 'facade',
+          module: p.module, motif, depth: p.depth, steps: p.steps, overlay: p.overlay, overlayRoll, z0: ctx.zOf('facade'), t, el: 'facade',
           lift: ctx.lift, origin: [0, -cy], parity: cell.i % 2,
           opts: { ...ctx.fret, ang: Math.atan2(pc[1] + cy, pc[0]), parity: cell.i % 2, reserve: 0 },
         }),
@@ -673,9 +811,27 @@ const PROFILES = {
   diamond: (t) => (t < 0.35 ? t / 0.35 : (1 - t) / 0.65),
   blade: (t) => Math.min(1, t / 0.08) * (1 - t) ** 0.6,
 };
-function petalShape(len, width, asym, kind = 'leaf') {
+// Freeform: straight runs through the five dragged widths, lifted to their upper hull so the petal stays convex.
+function freeProfile(nodes) {
+  const pts = [[0, 0], ...nodes.map((w, i) => [(i + 1) / 6, w]), [1, 0]];
+  const hull = [];
+  for (const q of pts) {
+    while (hull.length >= 2) {
+      const [a, b] = [hull[hull.length - 2], hull[hull.length - 1]];
+      if ((b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0]) >= 0) hull.pop();
+      else break;
+    }
+    hull.push(q);
+  }
+  return (t) => {
+    const i = Math.max(1, hull.findIndex((q) => q[0] >= t - 1e-9));
+    const [a, b] = [hull[i - 1], hull[i]];
+    return a[1] + ((b[1] - a[1]) * (t - a[0])) / (b[0] - a[0]);
+  };
+}
+function petalShape(len, width, asym, kind = 'leaf', nodes = null) {
   const n = 12;
-  const f = PROFILES[kind] || PROFILES.leaf;
+  const f = kind === 'freeform' && nodes ? freeProfile(nodes) : PROFILES[kind] || PROFILES.leaf;
   const ts = Array.from({ length: n + 1 }, (_, i) => i / n);
   if (kind === 'diamond') ts.splice(5, 0, 0.35);
   if (kind === 'blade') ts.splice(1, 0, 0.08);
@@ -730,12 +886,12 @@ function buildPetals(p, ctx) {
     const base = [r0 * Math.sin(th), -cy - r0 * Math.cos(th)];
     const c = Math.cos(phi);
     const s = Math.sin(phi);
-    const raw = petalShape(len, width, axis ? 0 : p.petalAsym, p.petalShape).map(([x, y]) => [base[0] + x * c - y * s, base[1] + x * s + y * c]);
+    const raw = petalShape(len, width, axis ? 0 : p.petalAsym, p.petalShape, p.petalNodes).map(([x, y]) => [base[0] + x * c - y * s, base[1] + x * s + y * c]);
     const P = clipHalf(raw, 0, 1, -(deckH + 30));
     if (P.length < 3 || area(P) < 0.6 * area(raw)) continue;
     for (const layer of petalLayers(P, p, ctx, 0.35)) {
       const { z, ...rest } = layer;
-      const part = { ...rest, frame: ctx.lift.frame(centroid(P), ctx.petalZ + z * step) };
+      const part = { ...rest, frame: ctx.lift.frame(centroid(P), ctx.zOf('petal') + z * step) };
       parts.push(part);
       if (p.mirror && !axis) parts.push(mirrorPart(part));
     }
@@ -757,6 +913,7 @@ function buildDisc(discParams, seedShift, D, cx, cy, z0, step, ctx) {
     holes: pt.holes.map((h) => ({ ...h, x: h.x * k + cx, y: h.y * k - cy, r: h.r * k })),
     cuts: [],
     etch: [],
+    etchLines: [],
     label: [pt.label[0] * k + cx, pt.label[1] * k - cy],
     minWidth: pt.minWidth * k,
     t: pt.t,
@@ -769,12 +926,33 @@ function buildDisc(discParams, seedShift, D, cx, cy, z0, step, ctx) {
 }
 
 // Polygon cores: rings of convex cells around the centre, each built with the current module.
-function coreCells(type, n, R) {
+function coreCells(type, n, R, seed) {
   const P = (r, a) => [r * Math.sin(a), -r * Math.cos(a)]; // a clockwise from straight up
   const h = Math.PI / n;
   const cells = [];
   const ngon = (r, k, cx = 0, cy = 0, rot = 0) => Array.from({ length: k }, (_, i) => [cx + r * Math.sin(rot + (i * TAU) / k), cy - r * Math.cos(rot + (i * TAU) / k)]);
-  if (type === 'iris') {
+  if (type === 'mandala') {
+    // dihedral: one half-wedge is designed at random, mirrored, then repeated n times
+    const rng = subRng(seed, 'mandala');
+    cells.push({ ring: 3, poly: ngon(0.16 * R, n, 0, 0, h) });
+    let r = 0.2 * R;
+    for (let band = 0; band < 3; band++) {
+      const last = band === 2;
+      const r2 = last ? R : r + (R - r) * (0.3 + 0.25 * rng());
+      const cut = h * (0.35 + 0.3 * rng());
+      const roll = rng();
+      const pointed = rng() < 0.6;
+      const spans = roll < 0.55 ? [[-cut, cut], [cut, 2 * h - cut]] : roll < 0.8 ? [[-h, h]] : [[0, 2 * h]];
+      for (let i = 0; i < n; i++) {
+        for (const [a0, a1] of spans) {
+          const b = 2 * h * i;
+          const shoulder = pointed ? r2 * 0.93 : r2;
+          cells.push({ ring: 2 - band, poly: [P(r + 0.03 * R, b + a0), P(shoulder, b + a0), ...(pointed ? [P(r2, b + (a0 + a1) / 2)] : []), P(shoulder, b + a1), P(r + 0.03 * R, b + a1)] });
+        }
+      }
+      r = r2;
+    }
+  } else if (type === 'iris') {
     cells.push({ ring: 2, poly: ngon(0.2 * R, n) });
     for (let i = 0; i < n; i++) cells.push({ ring: 1, poly: [P(0.24 * R, 2 * h * i - h), P(0.6 * R, 2 * h * i - h), P(0.6 * R, 2 * h * i + h), P(0.24 * R, 2 * h * i + h)] });
     for (let i = 0; i < 2 * n; i++) cells.push({ ring: 0, poly: [P(0.64 * R, h * i), P(R, h * i), P(R, h * (i + 1)), P(0.64 * R, h * (i + 1))] });
@@ -798,7 +976,7 @@ function buildCore(type, p, ctx, D, cx, cy, z0, discParams, seedShift) {
   const shift = p.seed % MIX.length;
   const parts = [];
   const never = () => 1;
-  for (const cell of coreCells(type, p.corePoints, D / 2)) {
+  for (const cell of coreCells(type, p.corePoints, D / 2, p.seed + seedShift)) {
     const placed = cell.poly.map(([x, y]) => [x + cx, y - cy]);
     const pieces = refine(placed, 0, { L: ctx.L, S: ctx.S, rng: never, axis: false, parity: cell.ring % 2, minInr: 90, want: 0 });
     for (const piece of pieces) {
@@ -839,10 +1017,86 @@ function buildSpikes(p, ctx) {
     if (P.length < 3 || area(P) < 0.6 * area(raw)) continue;
     const made = modulePanels(P, {
       module: own(p, 'spike', 'Module') === 'scales' ? 'flat' : own(p, 'spike', 'Module'), motif: own(p, 'spike', 'Motif') === 'mixed' ? 'louvre' : own(p, 'spike', 'Motif'), depth: p.depth * 0.6, steps: 1, overlay: 0, overlayRoll: 1,
-      z0: -60, t: 0.9, el: 'spike', lift: ctx.lift, origin: [0, -cy], opts: { ...ctx.fret, ang: Math.atan2(dir[1], dir[0]), parity: 1, reserve: 0 },
+      z0: ctx.zOf('spike'), t: 0.9, el: 'spike', lift: ctx.lift, origin: [0, -cy], opts: { ...ctx.fret, ang: Math.atan2(dir[1], dir[0]), parity: 1, reserve: 0 },
     });
     parts.push(...made);
     if (p.mirror) parts.push(...made.map(mirrorPart));
+  }
+  return parts;
+}
+
+// ------------------------------------------------------------------ tendrils
+
+const isConvex = (poly) => {
+  let sign = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const [a, b, c] = [poly[i], poly[(i + 1) % poly.length], poly[(i + 2) % poly.length]];
+    const x = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+    if (Math.abs(x) < 1e-6) continue;
+    if (sign && Math.sign(x) !== sign) return false;
+    sign = Math.sign(x);
+  }
+  return true;
+};
+
+// Flowing horns, vines and feathers. A curved spine is cut into short convex
+// segments (each its own panel), so the whole curve is still made of flat sheet parts.
+function buildTendrils(p, ctx) {
+  const n = p.tendrils;
+  if (!n) return [];
+  const { cy, deckH } = ctx;
+  const total = p.tendrilLength * M;
+  const w0 = Math.min(p.tendrilWidth * M, ctx.S);
+  const N = Math.max(6, Math.ceil(total / Math.min(ctx.L * 0.9, 520)));
+  const step = total / N;
+  const z0 = ctx.zOf('tendril');
+  const opts = (ang) => ({ ...ctx.fret, ang, parity: 1, reserve: 0 });
+  const motif = p.motif === 'mixed' ? 'louvre' : p.motif;
+  const parts = [];
+  const add = (made) => {
+    parts.push(...made);
+    if (p.mirror) parts.push(...made.map(mirrorPart));
+  };
+  for (const side of p.mirror ? [1] : [1, -1]) {
+    for (let i = 0; i < n; i++) {
+      const rng = subRng(p.seed, 'tendril', i);
+      const th = ((25 + (n > 1 ? (i * 85) / (n - 1) : 40)) * Math.PI) / 180;
+      let pos = [side * ctx.rBase * 0.9 * Math.sin(th), -cy - ctx.rBase * 0.9 * Math.cos(th)];
+      const head0 = Math.atan2(-Math.cos(th), side * Math.sin(th));
+      const turn = -side * p.tendrilCurl * TAU * 0.7 * (1 - 0.12 * i);
+      const spine = [];
+      for (let k = 0; k <= N; k++) {
+        const u = k / N;
+        const h = head0 + turn * u ** 1.4;
+        spine.push({ pos, h, w: Math.max(70, w0 * (1 - u) ** 0.8), u });
+        const hm = head0 + turn * ((k + 0.5) / N) ** 1.4;
+        pos = [pos[0] + Math.cos(hm) * step, pos[1] + Math.sin(hm) * step];
+      }
+      const edge = (q, sgn) => [q.pos[0] - Math.sin(q.h) * q.w * 0.5 * sgn, q.pos[1] + Math.cos(q.h) * q.w * 0.5 * sgn];
+      for (let k = 0; k < N; k++) {
+        const [a, b] = [spine[k], spine[k + 1]];
+        const quad = [edge(a, 1), edge(b, 1), edge(b, -1), edge(a, -1)];
+        if (quad.some((q) => q[1] > -(deckH + 30))) break; // stop at the deck
+        if (!isConvex(quad)) continue;
+        const P = insetConvex(quad, Math.min(p.joint, 40) / 2);
+        if (P && inradius(P) > ctx.web * 0.6) {
+          add(modulePanels(P, { module: 'flat', motif, depth: 0, steps: 1, overlay: 0, overlayRoll: 1, z0, t: 1 - a.u, el: 'tendril', lift: ctx.lift, origin: [0, -cy], opts: opts(a.h) }));
+        }
+        const roll = rng();
+        if (p.tendrilStyle === 'horn' || roll > p.tendrilLeaves + (p.tendrilStyle === 'feather' ? 0.3 : 0)) continue;
+        const sides = p.tendrilStyle === 'feather' ? [1, -1] : k % 2 ? [k % 4 === 1 ? 1 : -1] : [];
+        for (const sgn of sides) {
+          const feather = p.tendrilStyle === 'feather';
+          const len = feather ? Math.min(ctx.L, w0 * (0.5 + 1.4 * (1 - a.u))) : clamp(a.w * 2.4, 320, 1300);
+          const wid = feather ? Math.min(step * 0.85, ctx.S) : len * 0.42;
+          const ang = a.h + sgn * (feather ? 1.05 : 0.9);
+          const base = edge(a, sgn * 0.6);
+          const leaf = petalShape(len, wid, 0, feather ? 'blade' : p.petalShape, p.petalNodes).map(([x, y]) => [base[0] + x * Math.cos(ang) - y * Math.sin(ang), base[1] + x * Math.sin(ang) + y * Math.cos(ang)]);
+          if (leaf.some((q) => q[1] > -(deckH + 30)) || inradius(leaf) < ctx.web) continue;
+          add(modulePanels(leaf, { module: 'flat', motif: feather ? 'solid' : 'slots', depth: 0, steps: 1, overlay: 0, overlayRoll: 1, z0: z0 + (feather ? -35 : 40), t: clamp(1.1 - a.u, 0, 1), el: 'tendril', lift: ctx.lift, origin: [0, -cy], opts: { ...opts(ang), detail: 0 } }));
+        }
+      }
+    }
   }
   return parts;
 }
@@ -853,7 +1107,7 @@ function partArea(part) {
   return area(part.points) - part.holes.reduce((s, h) => s + Math.PI * h.r * h.r, 0) - (part.cuts || []).reduce((s, c) => s + area(c), 0);
 }
 
-const SOLID_CORES = ['disc', 'iris', 'star', 'rosette'];
+const SOLID_CORES = ['disc', 'iris', 'star', 'rosette', 'mandala'];
 
 function context(p, fab) {
   const L = Math.max(fab.sheetW, fab.sheetH) - 2 * EDGE;
@@ -871,7 +1125,8 @@ function context(p, fab) {
     W: p.width * M,
     cy: deckH + p.lift * M + D / 2,
     rBase: rInner + 100 + p.joint + petalLen * 0.55,
-    petalZ: Math.max(80, p.discZ * 0.5),
+    zOf: (el) => p.layerOrder.indexOf(el) * p.layerGap,
+    show: (el) => !p.hidden.includes(el),
   };
   ctx.lift = makeLift(p, ctx);
   return ctx;
@@ -881,7 +1136,7 @@ function context(p, fab) {
 export function sourcePanels(input, fabInput = {}, only = null) {
   const p = normalizeStage(input);
   const ctx = context(p, normalizeStageFab(fabInput));
-  ETCH_LINES = p.etch;
+  ETCH = { n: p.etch, pattern: p.etchPattern };
   const want = (k) => !only || only === k;
   const out = { cell: [], petal: [], spike: [], core: [] };
   const opts = { ...ctx.fret, ang: Math.PI / 2, parity: 0, reserve: 0 };
@@ -895,7 +1150,7 @@ export function sourcePanels(input, fabInput = {}, only = null) {
   }
   if (want('petal')) {
     const len = Math.min(p.petalLength * M, ctx.L);
-    const up = petalShape(len, Math.min(p.petalWidth * M, ctx.S), p.petalAsym, p.petalShape).map(([x, y]) => [y, len / 2 - x]);
+    const up = petalShape(len, Math.min(p.petalWidth * M, ctx.S), p.petalAsym, p.petalShape, p.petalNodes).map(([x, y]) => [y, len / 2 - x]);
     const step = Math.max(40, Math.abs(p.depth) * 0.35);
     out.petal = petalLayers(up, p, ctx, 0.35).map(({ z, ...rest }) => ({ ...rest, frame: flatFrame(z * step) }));
   }
@@ -915,7 +1170,7 @@ export function sourcePanels(input, fabInput = {}, only = null) {
 
 export function generateStage(input, discParams = DEFAULTS, fabInput = {}) {
   const p = normalizeStage(input);
-  ETCH_LINES = p.etch;
+  ETCH = { n: p.etch, pattern: p.etchPattern };
   const fab = normalizeStageFab(fabInput);
   const ctx = context(p, fab);
   const { L, S, W, deckH, D, cy, web } = ctx;
@@ -924,8 +1179,8 @@ export function generateStage(input, discParams = DEFAULTS, fabInput = {}) {
 
   const centreParts = [];
   const liftZ = (x) => ctx.lift.z(x, -cy);
-  if (ctx.hasCore) {
-    const core = buildCore(p.centre, p, ctx, D, 0, cy, p.discZ + liftZ(0), discParams, 0);
+  if (ctx.hasCore && ctx.show('core')) {
+    const core = buildCore(p.centre, p, ctx, D, 0, cy, ctx.zOf('core') + p.discZ + liftZ(0), discParams, 0);
     centreParts.push(...core.parts);
     traces.push(...core.traces);
   }
@@ -933,21 +1188,23 @@ export function generateStage(input, discParams = DEFAULTS, fabInput = {}) {
   // side medallions: a smaller core, mirrored either side
   const holes = [];
   const sideD = p.sideDisc * M;
-  if (sideD >= 800) {
+  if (sideD >= 800 && ctx.show('core')) {
     const sx = Math.min(p.sideOffset * M, W / 2 - sideD / 2 - 100);
     if (sx - sideD / 2 < ctx.rBase) notes.push('Side medallions overlap the centre: raise Medallion Offset or widen the stage.');
     else {
-      const side = buildCore(ctx.hasCore ? p.centre : 'disc', p, ctx, sideD, sx, cy, p.discZ * 0.7 + liftZ(sx), discParams, 17);
+      const side = buildCore(ctx.hasCore ? p.centre : 'disc', p, ctx, sideD, sx, cy, ctx.zOf('core') + p.discZ * 0.5 + liftZ(sx), discParams, 17);
       centreParts.push(...side.parts, ...side.parts.map(mirrorPart));
       for (const tr of side.traces) traces.push(tr, { ...tr, flip: true });
       holes.push({ x: sx, y: -cy, r: sideD / 2 + 40 + p.joint });
     }
   }
 
-  const facade = p.tiling === 'none' ? [] : buildFacade(p, ctx, holes);
-  if (p.tiling !== 'none' && !facade.length) notes.push('No room for the panel lattice: widen the stage, raise the crown or shrink the centre.');
-  const petals = buildPetals(p, ctx);
-  const spikes = buildSpikes(p, ctx);
+  const latticeOn = p.tiling !== 'none' && ctx.show('facade');
+  const facade = latticeOn ? buildFacade(p, ctx, holes) : [];
+  if (latticeOn && !facade.length) notes.push('No room for the panel lattice: widen the stage, raise the crown or shrink the centre.');
+  const petals = ctx.show('petal') ? buildPetals(p, ctx) : [];
+  const spikes = ctx.show('spike') ? buildSpikes(p, ctx) : [];
+  const tendrils = ctx.show('tendril') ? buildTendrils(p, ctx) : [];
 
   const booth = [];
   const bw = p.boothWidth * M;
@@ -969,7 +1226,7 @@ export function generateStage(input, discParams = DEFAULTS, fabInput = {}) {
     if (fab.printSet !== 'fit' && pt.el !== fab.printSet) return false;
     return fitsSheet(pt.points, fab.printBed - 10, fab.printBed - 10);
   };
-  const parts = [...spikes, ...facade, ...petals, ...centreParts, ...booth].map((pt, i) => ({ ...pt, id: String(i + 1), spots: [], print: printable(pt) }));
+  const parts = [...spikes, ...tendrils, ...facade, ...petals, ...centreParts, ...booth].map((pt, i) => ({ ...pt, id: String(i + 1), spots: [], print: printable(pt) }));
   const wanted = fab.printSet === 'none' ? 0 : parts.filter((pt) => pt.el !== 'booth' && (fab.printSet === 'fit' || pt.el === fab.printSet)).length;
 
   let top = deckH;

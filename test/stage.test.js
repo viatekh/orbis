@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { generateStage, sourcePanels, world, STAGE_DEFAULTS, TILINGS, MODULES, MOTIFS, normalizeStage } from '../src/stage.js';
 import { stageJob, checkStage, settingOutCSV, printFiles } from '../src/stagefab.js';
 import { STAGE_PRESETS } from '../src/stagepresets.js';
-import { CENTRES, FORMS } from '../src/stage.js';
+import { CENTRES, FORMS, ETCH_PATTERNS, TENDRIL_STYLES, scaleStage } from '../src/stage.js';
 import { elevationSVG, sourceSVG } from '../src/stagerender.js';
 import { DEFAULTS } from '../src/generator.js';
 import { signedArea } from '../src/fabrication.js';
@@ -72,7 +72,7 @@ test('fretwork stays inside its panel and leaves a web', () => {
 });
 
 test('modules give real depth', () => {
-  const flat = generateStage({ ...STAGE_DEFAULTS, module: 'flat', overlay: 0, petals: 0, discZ: 0, discStep: 0, sideDisc: 0 }, DEFAULTS);
+  const flat = generateStage({ ...STAGE_DEFAULTS, module: 'flat', overlay: 0, petals: 0, discZ: 0, discStep: 0, sideDisc: 0, layerGap: 0 }, DEFAULTS);
   assert.equal(flat.stats.reliefMm, 0);
   const stepped = generateStage({ ...STAGE_DEFAULTS, module: 'stepped', depth: 400 }, DEFAULTS);
   assert.ok(stepped.stats.reliefMm >= 400);
@@ -83,7 +83,7 @@ test('modules give real depth', () => {
   const flatArea = Math.abs(signedArea(face.points));
   const shadow = Math.abs(signedArea(face.points.map((q) => world(face, q).slice(0, 2))));
   assert.ok(flatArea > shadow * 1.02);
-  const recessed = generateStage({ ...STAGE_DEFAULTS, module: 'stepped', depth: -400 }, DEFAULTS);
+  const recessed = generateStage({ ...STAGE_DEFAULTS, module: 'stepped', depth: -400, layerGap: 0 }, DEFAULTS);
   assert.ok(recessed.extent.zMin <= -399);
 });
 
@@ -153,4 +153,57 @@ test('3D printing takes parts that fit the bed off the CNC sheets', () => {
   assert.equal(files[0].data.byteLength, 84 + dv.getUint32(80, true) * 50);
   const petals = generateStage(STAGE_DEFAULTS, DEFAULTS, { printSet: 'petal', printBed: 800 });
   assert.ok(petals.parts.filter((p) => p.print).every((p) => p.el === 'petal'));
+});
+
+test('etch detail never crosses a cutout', () => {
+  for (const etchPattern of Object.keys(ETCH_PATTERNS)) {
+    const stage = generateStage({ ...STAGE_DEFAULTS, etchPattern, etch: 3, module: 'flat', motif: 'mixed' }, DEFAULTS);
+    const lines = stage.parts.flatMap((p) => p.etchLines.map((l) => [p, l]));
+    if (etchPattern !== 'outline') assert.ok(lines.length > 200, etchPattern);
+    else assert.ok(stage.parts.some((p) => p.etch.length), etchPattern);
+    for (const [p, [a, b]] of lines) {
+      for (const t of [0.02, 0.5, 0.98]) {
+        const x = a[0] + (b[0] - a[0]) * t;
+        const y = a[1] + (b[1] - a[1]) * t;
+        for (const h of p.holes) assert.ok(Math.hypot(x - h.x, y - h.y) > h.r, `${etchPattern} line inside a hole`);
+        for (const cut of p.cuts) {
+          const sgn = Math.sign(signedArea(cut));
+          const inside = cut.every((q, i) => {
+            const r = cut[(i + 1) % cut.length];
+            return sgn * ((r[0] - q[0]) * (y - q[1]) - (r[1] - q[1]) * (x - q[0])) > 0;
+          });
+          assert.ok(!inside, `${etchPattern} line inside a cut on panel ${p.id}`);
+        }
+      }
+    }
+    assert.equal(stageJob(stage).engrave.lines.length, lines.length);
+  }
+});
+
+test('tendrils, layers, mandala core, freeform petals and scaling', () => {
+  for (const tendrilStyle of Object.keys(TENDRIL_STYLES)) {
+    const stage = generateStage({ ...STAGE_DEFAULTS, tendrils: 3, tendrilStyle, tendrilCurl: 0.9 }, DEFAULTS);
+    const t = stage.parts.filter((p) => p.el === 'tendril');
+    assert.ok(t.length > 20, tendrilStyle);
+    assert.equal(t.filter((p) => centreX(p) > 1).length, t.filter((p) => centreX(p) < -1).length);
+    assert.equal(stageJob(stage).oversize, 0, tendrilStyle);
+    for (const p of t) for (const q of p.points) assert.ok(world(p, q)[1] <= -stage.deck.h + 1);
+  }
+  const zOf = (stage, el) => Math.min(...stage.parts.filter((p) => p.el === el).map((p) => p.frame.o[2]));
+  const a = generateStage({ ...STAGE_DEFAULTS, layerOrder: ['spike', 'tendril', 'facade', 'petal', 'core'] }, DEFAULTS);
+  const b = generateStage({ ...STAGE_DEFAULTS, layerOrder: ['spike', 'tendril', 'petal', 'facade', 'core'] }, DEFAULTS);
+  assert.ok(zOf(a, 'petal') > zOf(a, 'facade') && zOf(b, 'petal') < zOf(b, 'facade'));
+  assert.equal(generateStage({ ...STAGE_DEFAULTS, hidden: ['petal'] }, DEFAULTS).parts.filter((p) => p.el === 'petal').length, 0);
+  assert.deepEqual(normalizeStage({ layerOrder: ['core', 'bogus', 'core'] }).layerOrder.slice(-1), ['core']);
+  assert.equal(normalizeStage({ layerOrder: ['core'] }).layerOrder.length, 5);
+
+  const m1 = generateStage({ ...STAGE_DEFAULTS, centre: 'mandala', corePoints: 7 }, DEFAULTS).parts.filter((p) => p.el === 'core');
+  assert.ok(m1.length > 30);
+  const free = generateStage({ ...STAGE_DEFAULTS, petalShape: 'freeform', petalNodes: [1, 0.2, 0.9, 0.1, 0.6] }, DEFAULTS);
+  assert.ok(free.parts.filter((p) => p.el === 'petal').length >= 14);
+
+  const big = scaleStage(STAGE_DEFAULTS, 1.5);
+  assert.equal(big.width, 27);
+  assert.ok(Math.abs(big.discDiameter - STAGE_DEFAULTS.discDiameter * 1.5) < 0.06 && big.rim === 90);
+  assert.equal(big.cells, STAGE_DEFAULTS.cells);
 });

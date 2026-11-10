@@ -15,7 +15,13 @@ The **Stage** workspace turns the disc into the centrepiece of a festival stage 
 
 - **Everything is a flat panel placed in 3D.** Each part keeps its flat cut shape plus a position, so panels can stand off the back plane, step forward or back, or tilt into folded forms. Drag the view to orbit.
 - **Source pieces**: the cell, petal, spike and core each have a tab with a large preview and a gallery of every option drawn on that piece, so you can see what a choice does before picking it. Petals, spikes and the core can follow the cell or carry their own module and fretwork. Petal shapes: leaf, eye, teardrop, diamond, blade.
-- **Etch lines**: score-only detail that follows each panel's outline inside the rim, exported on the engrave layer.
+- **Etch detail**: a score-only layer (outline, voronoi, hatch, grid or rings) clipped against every cutout so nothing is engraved across an opening; exported on the engrave layer.
+- **Tendrils**: flowing horns, vines and feathers. A curved spine is cut into short convex segments, so the curve is still made of flat sheet parts; vines grow leaves and feathers grow barbs.
+- **Mandala core**: a dihedral design, where one half-wedge is generated, mirrored, then repeated around the centre.
+- **Freeform petal**: drag five handles to shape the petal; it is kept convex automatically.
+- **Layers**: drag to reorder spikes, tendrils, lattice, petals and core (order sets stand-off), or hide any of them.
+- **Scale together**: resizing the stage width rescales every size in proportion, while sheet, bit and thickness stay fixed.
+- **Hide controls**: switch it on to put an eye on every slider and hide the ones you never use.
 - **View**: drag to orbit, scroll or pinch to zoom, Shift-drag to pan.
 - **Modules**: *Stepped* (nested frames stepping forward, or back for a portal look), *Folded* (each cell becomes a pyramid of tilted faces, cut at true size), *Scales* (panels hinged up from their inner edge like shingles), or *Flat* with raised islands.
 - **Fretwork**: window (frame for diffuser), nested slots, fan, slat fan, louvre, halftone perforation, or a mix by ring. A minimum web is always kept. *Backlit* lights every cutout.

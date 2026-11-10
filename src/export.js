@@ -37,6 +37,7 @@ export function jobSVG(job, meta = '', { preview = false } = {}) {
   const engrave =
     job.engrave.arcs.map((a) => `<path d="${arcD(a)}"/>`).join('') +
     job.engrave.polys.map((p) => `<path d="${polyD(p)}"/>`).join('') +
+    (job.engrave.lines || []).map((l) => `<path d="${polyD(l).slice(0, -1)}"/>`).join('') +
     job.engrave.dots.map((d) => `<circle cx="${f3(d.x)}" cy="${f3(d.y)}" r="${f3(d.r)}" fill="${LAYER_COLORS.engrave}"/>`).join('');
   const labels = job.labels.map((l) => `<path d="${strokeText(l.text, l.x, l.y, l.size).map(lineD).join('')}"/>`).join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -98,6 +99,7 @@ export function jobDXF(job) {
     g(50, deg(-a.a1)); g(51, deg(-a.a0));
   }
   for (const p of job.engrave.polys) poly('ENGRAVE', p);
+  for (const l of job.engrave.lines || []) poly('ENGRAVE', l, false);
   for (const d of job.engrave.dots) circle('ENGRAVE', d);
   for (const l of job.labels) for (const line of strokeText(l.text, l.x, l.y, l.size)) poly('LABELS', line, false);
   for (const p of job.inner.polys) poly('CUT_INNER', p);

@@ -59,7 +59,7 @@ export function panelsMarkup(parts, cam, { mode, palette, mat, backlit, draft = 
       for (const c of pt.cuts || []) d += pathOf(c.map(place));
       for (const h of pt.holes) d += pathOf(circle(h).map(place));
     }
-    const etch = draft ? '' : (pt.etch || []).map((e) => pathOf(e.map(place))).join('');
+    const etch = draft ? '' : (pt.etch || []).map((e) => pathOf(e.map(place))).join('') + (pt.etchLines || []).map((e) => pathOf(e.map(place)).slice(0, -1)).join('');
     return { pt, d, etch, glow: pathOf(outline), lit, depth: outline.reduce((s, q) => s + q[2], 0) / outline.length };
   });
   items.sort((a, b) => a.depth - b.depth);
@@ -219,5 +219,5 @@ export function sourceSVG(parts, { mode = 'night', palette = 'neon', material = 
     }
   }
   const pad = Math.max(x1 - x0, y1 - y0) * 0.08;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${f0(x0 - pad)} ${f0(y0 - pad)} ${f0(x1 - x0 + 2 * pad)} ${f0(y1 - y0 + 2 * pad)}"><rect x="${f0(x0 - pad)}" y="${f0(y0 - pad)}" width="${f0(x1 - x0 + 2 * pad)}" height="${f0(y1 - y0 + 2 * pad)}" fill="${th.sky}"/>${panelsMarkup(simple ? parts.map((pt) => ({ ...pt, etch: [] })) : parts, cam, { mode: mode === 'setout' ? 'day' : mode, palette, mat, backlit })}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${f0(x0 - pad)} ${f0(y0 - pad)} ${f0(x1 - x0 + 2 * pad)} ${f0(y1 - y0 + 2 * pad)}"><rect x="${f0(x0 - pad)}" y="${f0(y0 - pad)}" width="${f0(x1 - x0 + 2 * pad)}" height="${f0(y1 - y0 + 2 * pad)}" fill="${th.sky}"/>${panelsMarkup(simple ? parts.map((pt) => ({ ...pt, etch: [], etchLines: [] })) : parts, cam, { mode: mode === 'setout' ? 'day' : mode, palette, mat, backlit })}</svg>`;
 }

@@ -372,3 +372,17 @@ body[data-mode='stage'] .disc-only, body:not([data-mode='stage']) .stage-only { 
 .gallery button.text span { background: none; white-space: normal; }
 #stageZoomSeg button { flex: none; min-width: 30px; }
 .elevation { touch-action: none; }
+.layers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.layers li { display: grid; grid-template-columns: 16px 1fr auto auto auto; align-items: center; gap: 6px; padding: 4px 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); font-size: 13px; cursor: grab; }
+.layers li.off { opacity: 0.45; }
+.layers li.over { border-color: var(--accent); }
+.layers .grip { color: var(--muted); font-family: var(--mono); letter-spacing: -2px; }
+.layers button { padding: 0 6px; height: 22px; font-size: 12px; }
+.free-editor { background: #07090d; border: 1px solid var(--line); border-radius: var(--r); }
+.free-editor svg { width: 100%; display: block; touch-action: none; }
+.free-editor circle { cursor: ew-resize; }
+.param { position: relative; }
+.param .eye { display: none; border: 0; background: none; padding: 0; width: 22px; height: 22px; color: var(--muted); font-size: 13px; }
+.customizing .param .eye { display: block; }
+.param.hid { display: none; }
+.customizing .param.hid { display: grid; opacity: 0.35; }
