@@ -273,8 +273,93 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
   const FRONT = { yaw: 0, pitch: 0 };
   let makeTimer;
 
+  // ------------------------------------------------------------ undo / redo
+  // Every render records the design if it changed. Changes in quick succession (a slider
+  // being dragged) collapse into one step.
+  const history = { list: [], at: -1, stamp: 0, busy: false };
+  function record() {
+    const snap = JSON.stringify({ params: state.params, palette: state.palette });
+    if (history.busy || history.list[history.at] === snap) return;
+    const now = Date.now();
+    if (history.at >= 0 && now - history.stamp < 600 && history.at === history.list.length - 1 && history.at > 0) history.list[history.at] = snap;
+    else {
+      history.list = history.list.slice(0, history.at + 1).concat(snap).slice(-80);
+      history.at = history.list.length - 1;
+    }
+    history.stamp = now;
+    syncHistory();
+  }
+  function syncHistory() {
+    $('#btnStageUndo').disabled = history.at <= 0;
+    $('#btnStageRedo').disabled = history.at >= history.list.length - 1;
+  }
+  function travel(step) {
+    const to = history.at + step;
+    if (to < 0 || to >= history.list.length) return;
+    history.at = to;
+    const snap = JSON.parse(history.list[to]);
+    state.params = normalizeStage(snap.params);
+    state.palette = snap.palette;
+    history.busy = true;
+    render();
+    renderVariations();
+    history.busy = false;
+    history.stamp = 0;
+    syncHistory();
+  }
+  $('#btnStageUndo').addEventListener('click', () => travel(-1));
+  $('#btnStageRedo').addEventListener('click', () => travel(1));
+  window.addEventListener('keydown', (e) => {
+    if (document.body.dataset.mode !== 'stage' || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) && document.activeElement.type !== 'range' && document.activeElement.type !== 'checkbox') return;
+    e.preventDefault();
+    travel(e.shiftKey ? 1 : -1);
+  });
+
+  // ------------------------------------------------------------ saved designs
+  const SAVED_KEY = 'orbis.stage.saved';
+  let savedRun = 0;
+  function renderSaved() {
+    const run = ++savedRun;
+    const host = $('#stageSaved');
+    const saved = read(SAVED_KEY, []);
+    host.innerHTML = '';
+    $('#savedNote').hidden = saved.length > 0;
+    const next = (i) => {
+      if (run !== savedRun || i >= saved.length) return;
+      const item = saved[i];
+      const params = normalizeStage(item.params);
+      const b = document.createElement('div');
+      b.className = 'var saved';
+      b.innerHTML = `<button class="load" title="Load this design">${elevationSVG(generateStage(params, getDisc(), state.fab), { mode: 'night', palette: item.palette, draft: true })}<span><em></em></span></button><button class="del ghost" title="Remove" aria-label="Remove saved design">×</button>`;
+      b.querySelector('em').textContent = item.name;
+      b.querySelector('.load').addEventListener('click', () => {
+        state.params = params;
+        if (PALETTES[item.palette]) state.palette = item.palette;
+        render();
+        renderVariations();
+      });
+      b.querySelector('.del').addEventListener('click', () => {
+        write(SAVED_KEY, read(SAVED_KEY, []).filter((s) => s.t !== item.t));
+        renderSaved();
+      });
+      host.appendChild(b);
+      setTimeout(() => next(i + 1), 30);
+    };
+    next(0);
+  }
+  $('#btnStageSave').addEventListener('click', () => {
+    const saved = read(SAVED_KEY, []);
+    const p = state.params;
+    const name = `${TILINGS[p.tiling] === 'None' ? CENTRES[p.centre] : `${TILINGS[p.tiling]} ${p.layout}`} · seed ${p.seed}`;
+    write(SAVED_KEY, [{ name, params: p, palette: state.palette, t: Date.now() }, ...saved].slice(0, 24));
+    renderSaved();
+    toast('Saved in this browser');
+  });
+
   function render() {
     if (document.body.dataset.mode !== 'stage') return;
+    record();
     sync();
     write(KEY, { params: state.params, fab: state.fab, mode: state.mode, palette: state.palette });
     state.stage = generateStage(state.params, getDisc(), state.fab);
@@ -681,4 +766,6 @@ export function initStage({ getDisc, setDisc, saveFile, saveZipped, toast }) {
   });
 
   setWorkspace(read(MODE_KEY, 'stage') === 'disc' ? 'disc' : 'stage');
+  renderSaved();
+  syncHistory();
 }

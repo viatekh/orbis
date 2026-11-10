@@ -28,6 +28,8 @@
     </div>
     <div class="bar-actions stage-only">
       <button id="btnStageRandom" title="Randomize the stage">Randomize</button>
+      <button id="btnStageUndo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+      <button id="btnStageRedo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
       <button id="btnStageSeed" title="New seed">New seed</button>
       <button id="btnStageReset" title="Back to the default stage">Reset</button>
     </div>
@@ -203,6 +205,9 @@
       </div>
       <div class="vars-head"><h2>Variations</h2><button id="btnStageShuffle" class="ghost" title="New variations">Shuffle</button></div>
       <div class="variations" id="stageVariations"></div>
+      <div class="vars-head"><h2>Saved</h2><button id="btnStageSave" class="ghost" title="Keep this design in this browser">Save this</button></div>
+      <div class="variations" id="stageSaved"></div>
+      <p class="note" id="savedNote">Nothing saved yet. Save a design to keep it here; it stays in this browser.</p>
       <p class="note">To scale; figures are 1.75 m. Drag to orbit, scroll or pinch to zoom, Shift-drag to pan. Every panel is sized to cut from one sheet; cells too big for a sheet are subdivided automatically.</p>
     </section>
 
