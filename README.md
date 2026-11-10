@@ -30,6 +30,7 @@ The **Stage** workspace turns the disc into the centrepiece of a festival stage 
 - **Depth and bands**: the lattice sits on a form (funnel, cone, dome, barrel, ripple) up to 8 m deep, and is divided into concentric *Bands* that step in depth and alternate module. Far panels dim in the front view so depth reads straight on. The DJ booth front is switched off for now.
 - **Organic parts** (`src/ribbon.js`): horns, flames, feathers, vines, curled petals and flame spikes are *ribbons* — a spine curve with a width either side — so their outlines are truly curved, in single pieces split only where a sheet runs out. Cutouts follow the curve: feather vein, flowing slots, ribs, eyes or a frame. *Spikes on crown* rides them along the crown edge.
 - **Banded radial lattice**: the radial lattice is built in concentric bands that add cells as the radius grows, so modules stay a similar size instead of ballooning at the edge.
+- **Stack nesting**: a stepped module's frames are cut from each other's window offcuts (innermost first, the window after), so a whole stack takes the sheet space of its outer frame. The default stage drops from 69 sheets to 55.
 - **Pick a stage**: Randomise opens a sheet of eight rolls to choose from, optionally limited to one family.
 - **Fixing holes**: set a hole diameter under Make to add bolt holes in the solid rim of back-plane panels and at the ends of curved parts; they are counted in the bill of materials and the setting-out list.
 - **Lights**: plays a chase outward from the centre in the night view.

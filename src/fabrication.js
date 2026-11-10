@@ -465,6 +465,37 @@ function packSheets(design, fab, k, job, labelSize) {
         const [px, py] = rot(pt, c, sn);
         return [px + tx, py + ty];
       };
+      // pieces nested in this part's window offcut are cut first, innermost first, then the
+      // window that frees them: cut the window first and they would come loose mid-cut
+      for (const child of it.p.nested || []) {
+        for (const h of child.holes) {
+          const [hx, hy] = tf([h.x, h.y]);
+          job.inner.circles.push({ x: hx, y: hy, r: Math.max(0.05, h.r - k) });
+        }
+        for (const c of child.cuts || []) (child.cutsLast ? job.cut.polys : job.inner.polys).push(c.map(tf));
+        for (const e of child.etch || []) job.engrave.polys.push(e.map(tf));
+        for (const e of child.etchLines || []) job.engrave.lines.push(e.map(tf));
+        job.cut.polys.push(child.points.map(tf));
+        if (fab.labels) {
+          const [lx, ly] = tf(child.label);
+          job.labels.push({ x: lx, y: ly, text: child.id, size: labelSize });
+        }
+      }
+      if (it.p.nested) {
+        for (const c of it.p.cuts || []) job.cut.polys.push(c.map(tf));
+        job.cut.polys.push(it.poly.map(tf));
+        for (const h of it.p.holes) {
+          const [hx, hy] = tf([h.x, h.y]);
+          job.inner.circles.push({ x: hx, y: hy, r: Math.max(0.05, h.r - k) });
+        }
+        for (const e of it.p.etch || []) job.engrave.polys.push(e.map(tf));
+        for (const e of it.p.etchLines || []) job.engrave.lines.push(e.map(tf));
+        if (fab.labels) {
+          const [lx, ly] = tf(it.p.label);
+          job.labels.push({ x: lx, y: ly, text: it.p.id, size: labelSize });
+        }
+        continue;
+      }
       job.cut.polys.push(it.poly.map(tf));
       for (const h of it.p.holes) {
         const [hx, hy] = tf([h.x, h.y]);

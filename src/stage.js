@@ -681,6 +681,8 @@ function modulePanels(P, m) {
       }
       const cap = insetConvex(P, K * band);
       if (cap) out.push(flat(cap, fretwork(cap, m.motif, m.opts), m.depth, K));
+      // each frame's window offcut is big enough to cut the next piece from: note the stack so nesting can use it
+      out.forEach((pt, k) => { pt.stack = k; pt.stackGap = band * 0.28; });
       return out;
     }
   }
@@ -849,6 +851,20 @@ function buildFacade(p, ctx, holes) {
     }
     sizes.push(n);
   });
+  // an outer band that only survives as a short arc reads as debris: drop it, and anything beyond
+  if (!grid) {
+    const perRow = [];
+    kept.forEach((k) => {
+      if (!k.alive) return;
+      const b = (perRow[k.cell.band] ||= { n: 0, rows: new Set() });
+      b.n++;
+      b.rows.add(k.cell.i);
+    });
+    const density = perRow.map((b) => (b ? b.n / b.rows.size : 0));
+    let cut = Infinity;
+    for (let b = 1; b < density.length; b++) if (density[b] < density[b - 1] * 0.55) { cut = b; break; }
+    kept.forEach((k) => { if (k.cell.band >= cut) k.alive = false; });
+  }
   const least = Math.max(5, Math.max(...sizes) * 0.2);
   kept.forEach((k, id) => { if (group[id] >= 0 && sizes[group[id]] < least) k.alive = false; });
 

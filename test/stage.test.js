@@ -24,7 +24,8 @@ test('every panel fits a sheet, across tilings, modules and sizes', () => {
       const stage = generateStage({ ...STAGE_DEFAULTS, tiling, module, seed, width, discDiameter, crownHeight, cells, depth }, { ...DEFAULTS, wallAngle: 40 });
       const job = stageJob(stage);
       assert.equal(job.oversize, 0, `${tiling} ${module} seed ${seed}`);
-      assert.equal(job.cut.polys.length, stage.parts.length);
+      assert.equal(job.labels.length, stage.parts.length, 'every panel is placed once');
+      assert.ok(job.cut.polys.length >= stage.parts.length);
     }
   }
 });
@@ -325,4 +326,18 @@ test('fixing holes sit in solid material, clear of edges and cutouts', () => {
     }
   }
   assert.ok(settingOutCSV(stage).split('\n')[0].endsWith('fixing_holes'));
+});
+
+test('stepped stacks nest inside their own window offcuts', () => {
+  const stage = generateStage({ ...STAGE_DEFAULTS, module: 'stepped', steps: 2 }, DEFAULTS);
+  const job = stageJob(stage);
+  assert.ok(job.nested > 100);
+  assert.equal(job.oversize, 0);
+  // a bit too fat for the gap between frames turns nesting off, and costs sheets
+  const fat = generateStage({ ...STAGE_DEFAULTS, module: 'stepped', steps: 2 }, DEFAULTS, { tool: 12 });
+  const fatJob = stageJob(fat);
+  assert.ok(fatJob.nested < job.nested);
+  // nested or not, nothing is lost: outlines = panels + the windows moved into the cut pass
+  assert.equal(job.labels.length, stage.parts.length);
+  assert.ok(job.cut.polys.length > stage.parts.length);
 });

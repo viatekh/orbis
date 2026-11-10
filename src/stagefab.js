@@ -10,8 +10,39 @@ const Q = 5;
 
 export function stageJob(stage) {
   const fab = stage.fab;
+  // Stepped modules: each frame's window offcut holds the next frame, so a whole stack
+  // nests in the footprint of its outer frame.
+  const small1 = (p) => ({
+    id: p.id,
+    points: p.points.map(([x, y]) => [x / Q, y / Q]),
+    holes: p.holes.map((h) => ({ x: h.x / Q, y: h.y / Q, r: h.r / Q })),
+    cuts: (p.cuts || []).map((c) => c.map(([x, y]) => [x / Q, y / Q])),
+    etch: (p.etch || []).map((c) => c.map(([x, y]) => [x / Q, y / Q])),
+    etchLines: (p.etchLines || []).map((c) => c.map(([x, y]) => [x / Q, y / Q])),
+    label: [p.label[0] / Q, p.label[1] / Q],
+    minWidth: p.minWidth / Q,
+    spots: [],
+  });
+  const groups = [];
+  for (const p of stage.parts) {
+    const last = groups[groups.length - 1];
+    if (p.stack > 0 && last && last[last.length - 1].stack === p.stack - 1 && p.stackGap >= fab.tool * 1.5 + 3) last.push(p);
+    else groups.push([p]);
+  }
+  const nestedParts = [];
+  let nestedCount = 0;
+  for (const g of groups) {
+    if (g.length === 1 || g.some((p) => p.print)) {
+      for (const p of g) if (!p.print) nestedParts.push(small1(p));
+      continue;
+    }
+    // innermost first; every frame but the outermost cuts its window after what sits inside it
+    const inner = g.slice(1).reverse().map((p, i) => ({ ...small1(p), cutsLast: i > 0 }));
+    nestedParts.push({ ...small1(g[0]), nested: inner });
+    nestedCount += inner.length;
+  }
   const small = {
-    parts: stage.parts.filter((p) => !p.print).map((p) => ({
+    parts: nestedParts.length || !stage.parts.length ? nestedParts : stage.parts.filter((p) => !p.print).map((p) => ({
       id: p.id,
       points: p.points.map(([x, y]) => [x / Q, y / Q]),
       holes: p.holes.map((h) => ({ x: h.x / Q, y: h.y / Q, r: h.r / Q })),
@@ -49,6 +80,7 @@ export function stageJob(stage) {
     notes: [],
     sheets: job.sheets,
     oversize: job.oversize,
+    nested: nestedCount,
     stats: { cutLengthMm: cut, pierces: job.stats.pierces, passes, minutes: (cut * passes) / 50 / 60 + (job.stats.pierces * 4) / 60 },
   };
 }
@@ -61,6 +93,7 @@ export function checkStage(stage, job) {
 
   if (job.oversize) add('fail', `${job.oversize} panel${job.oversize > 1 ? 's are' : ' is'} larger than a ${fab.sheetW}×${fab.sheetH} sheet.`);
   else add('ok', `${stats.parts - stats.printed} panels nest onto ${job.sheets} sheet${job.sheets > 1 ? 's' : ''} of ${fab.sheetW}×${fab.sheetH}.`);
+  if (job.nested) add('info', `${job.nested} panels are cut from the window offcuts of the frames around them. Cut order matters there: innermost piece first, the frame's window after — the files list them in that order.`);
 
   if (fab.printSet !== 'none') {
     if (stats.printed) add('ok', `${stats.printed} parts print on a ${fab.printBed} mm bed, ${fab.printThickness} mm thick.`);
