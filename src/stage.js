@@ -9,8 +9,11 @@
 import { subRng } from './rng.js';
 import { generate, scaleParams, DEFAULTS, quantize } from './generator.js';
 import { MATERIALS, signedArea } from './fabrication.js';
-import { lerp, clamp, area, perimeter, centroid, clipHalf, edgesOf, deeper, shallower, solid, insetConvex, insideBy, inradius, segDist } from './convex.js';
+import { lerp, clamp, area, perimeter, centroid, clipHalf, edgesOf, deeper, shallower, solid, insetConvex, insideBy, inradius, segDist, fitsSheet } from './convex.js';
 import { PATTERNS, patternCells } from './patterns.js';
+import { RIBBON_MOTIFS, RIBBON_PROFILES, makeSpine, ribbonParts } from './ribbon.js';
+
+export { RIBBON_MOTIFS };
 
 const M = 1000;
 const TAU = Math.PI * 2;
@@ -25,7 +28,7 @@ export const CENTRES = { disc: 'Ring disc', iris: 'Iris', star: 'Star', rosette:
 export const PETAL_SHAPES = { leaf: 'Leaf', eye: 'Eye', teardrop: 'Teardrop', diamond: 'Diamond', blade: 'Blade', freeform: 'Freeform' };
 export const LAYERS = { spike: 'Spikes', tendril: 'Tendrils', facade: 'Lattice', petal: 'Petals', core: 'Core' };
 export const ETCH_PATTERNS = { outline: 'Outline', hatch: 'Hatch', grid: 'Grid', rings: 'Contours', ...PATTERNS };
-export const TENDRIL_STYLES = { horn: 'Horn', vine: 'Vine', feather: 'Feather' };
+export const TENDRIL_STYLES = { horn: 'Horn', flame: 'Flame', feather: 'Feather', vine: 'Vine' };
 const INHERIT = { inherit: 'Same as cell' };
 export const PIECE_MODULES = { ...INHERIT, ...MODULES };
 export const PIECE_MOTIFS = { ...INHERIT, ...MOTIFS };
@@ -66,6 +69,7 @@ export const STAGE_PARAMS = [
   { key: 'petalWidth', label: 'Width (m)', group: 'petal', min: 0.2, max: 1.1, step: 0.05, def: 0.7, rand: [0.45, 1] },
   { key: 'petalLean', label: 'Lean (°)', group: 'petal', min: -60, max: 60, step: 1, def: 22, rand: [-45, 45] },
   { key: 'petalAsym', label: 'Flame', group: 'petal', min: 0, max: 0.6, step: 0.01, def: 0.3, rand: [0, 0.55] },
+  { key: 'petalCurl', label: 'Curl', group: 'petal', min: -1, max: 1, step: 0.01, def: 0, rand: [-0.8, 0.8] },
   { key: 'petalLayers', label: 'Layers', group: 'petal', min: 1, max: 3, step: 1, def: 3, rand: [2, 3] },
 
   { key: 'spikes', label: 'Spikes', group: 'spike', min: 0, max: 24, step: 1, def: 0, rand: [0, 14] },
@@ -73,10 +77,14 @@ export const STAGE_PARAMS = [
   { key: 'spikeLength', label: 'Length (m)', group: 'spike', min: 0.5, max: 2.3, step: 0.05, def: 2, rand: [1.2, 2.3] },
   { key: 'spikeWidth', label: 'Width (m)', group: 'spike', min: 0.15, max: 1.1, step: 0.05, def: 0.5, rand: [0.3, 0.8] },
 
+  { key: 'spikeCurl', label: 'Curl (flame)', group: 'spike', min: -1, max: 1, step: 0.01, def: 0, rand: [-0.8, 0.8] },
+
   { key: 'tendrils', label: 'Per Side', group: 'tendril', min: 0, max: 6, step: 1, def: 0, rand: [0, 4] },
   { key: 'tendrilLength', label: 'Length (m)', group: 'tendril', min: 2, max: 10, step: 0.1, def: 6, rand: [4, 8] },
   { key: 'tendrilCurl', label: 'Curl', group: 'tendril', min: -1, max: 1, step: 0.01, def: 0.55, rand: [-0.9, 0.9] },
   { key: 'tendrilWidth', label: 'Base Width (m)', group: 'tendril', min: 0.2, max: 1.1, step: 0.05, def: 0.7, rand: [0.4, 1] },
+  { key: 'tendrilFrom', label: 'First Angle (°)', group: 'tendril', min: 0, max: 150, step: 1, def: 25, rand: [10, 70] },
+  { key: 'tendrilSweep', label: 'Fan Sweep (°)', group: 'tendril', min: 0, max: 150, step: 1, def: 85, rand: [40, 110] },
   { key: 'tendrilLeaves', label: 'Leaves / Barbs', group: 'tendril', min: 0, max: 1, step: 0.01, def: 0.7, rand: [0.3, 1] },
 
   { key: 'cells', label: 'Cells Around', group: 'facade', min: 10, max: 48, step: 2, def: 24, rand: [16, 30] },
@@ -86,8 +94,8 @@ export const STAGE_PARAMS = [
   { key: 'crownDepth', label: 'Crown Depth', group: 'facade', min: 0, max: 0.6, step: 0.01, def: 0.18, rand: [0.1, 0.45] },
   { key: 'squareness', label: 'Squareness', group: 'facade', min: 1.2, max: 5, step: 0.1, def: 2.8, rand: [1.8, 3.6] },
   { key: 'joint', label: 'Shadow Gap (mm)', group: 'facade', min: 20, max: 150, step: 5, def: 50, rand: [30, 80] },
-  { key: 'subdivide', label: 'Subdivision', group: 'facade', min: 0, max: 1, step: 0.01, def: 0.2, rand: [0, 0.5] },
-  { key: 'erode', label: 'Edge Erosion', group: 'facade', min: 0, max: 1, step: 0.01, def: 0.1, rand: [0, 0.5] },
+  { key: 'subdivide', label: 'Subdivision', group: 'facade', min: 0, max: 1, step: 0.01, def: 0.1, rand: [0, 0.5] },
+  { key: 'erode', label: 'Edge Erosion', group: 'facade', min: 0, max: 1, step: 0.01, def: 0, rand: [0, 0.5] },
 
   { key: 'formDepth', label: 'Form Depth (m)', group: 'facade', min: -8, max: 8, step: 0.1, def: -3, rand: [-5, 5] },
   { key: 'zones', label: 'Bands', group: 'facade', min: 1, max: 6, step: 1, def: 3, rand: [2, 5] },
@@ -107,7 +115,7 @@ export const STAGE_PARAM_MAP = Object.fromEntries(STAGE_PARAMS.map((p) => [p.key
 
 const CHOICES = {
   tiling: TILINGS, module: MODULES, motif: MOTIFS, centre: CENTRES, form: FORMS, petalShape: PETAL_SHAPES,
-  etchPattern: ETCH_PATTERNS, tendrilStyle: TENDRIL_STYLES, layout: LAYOUTS,
+  etchPattern: ETCH_PATTERNS, tendrilStyle: TENDRIL_STYLES, layout: LAYOUTS, ribbonMotif: RIBBON_MOTIFS,
   coreModule: PIECE_MODULES, coreMotif: PIECE_MOTIFS, spikeModule: PIECE_MODULES, spikeMotif: PIECE_MOTIFS, petalMotif: PIECE_MOTIFS,
 };
 // Each piece can follow the lattice cell or carry its own module and fretwork.
@@ -125,6 +133,7 @@ export const STAGE_DEFAULTS = {
   petalShape: 'leaf',
   etchPattern: 'outline',
   tendrilStyle: 'horn',
+  ribbonMotif: 'vein',
   layerOrder: Object.keys(LAYERS), // back to front
   hidden: [],
   petalNodes: [0.5, 0.9, 1, 0.7, 0.35], // freeform petal half-widths from base to tip
@@ -199,28 +208,6 @@ const mirrorPart = (pt) => {
 
 // ------------------------------------------------------------------ convex geometry
 // Every lattice panel is a convex polygon, which keeps clipping and insetting exact.
-
-// The tightest bounding box of a convex polygon lies along one of its edges.
-function fitsSheet(poly, L, S) {
-  for (let i = 0; i < poly.length; i++) {
-    const a = poly[i];
-    const b = poly[(i + 1) % poly.length];
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    if (len < 1e-6) continue;
-    const ux = (b[0] - a[0]) / len;
-    const uy = (b[1] - a[1]) / len;
-    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
-    for (const [x, y] of poly) {
-      const u = x * ux + y * uy;
-      const v = -x * uy + y * ux;
-      u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
-    }
-    const w = u1 - u0;
-    const h = v1 - v0;
-    if ((w <= L && h <= S) || (w <= S && h <= L)) return true;
-  }
-  return false;
-}
 
 // ------------------------------------------------------------------ lattice
 
@@ -748,14 +735,37 @@ function buildFacade(p, ctx, holes) {
     const first = { hex: 1 / Math.sqrt(3), diamond: 0.62, shard: 0.8, brick: 0.36 }[p.tiling] || 0;
     const uC = first + iC * step + (p.tiling === 'shard' ? 0.4 : 0);
     toXY = ([u, v]) => [v * s, -cy - (u - uC) * s];
-    cellsIn = tilingCells(p.tiling, 2 * Math.ceil(W / s / 2 + 2), (iC + rTop / (s * step) + 2) * step);
+    cellsIn = tilingCells(p.tiling, 2 * Math.ceil(W / s / 2 + 2), (iC + rTop / (s * step) + 2) * step).map((cell) => ({ ...cell, raw: cell.verts.map(toXY), band: 0, Nb: N, row: cell.i }));
   } else {
-    toXY = ([u, v]) => {
-      const r = rBase * Math.exp(u * dv * p.stretch);
-      const a = Math.PI / 2 - v * dv;
-      return [r * Math.cos(a), -cy - r * Math.sin(a)];
-    };
-    cellsIn = tilingCells(p.tiling, N, Math.log(rMax / rBase) / (dv * p.stretch));
+    // Radial: cells grow with radius, so the lattice is built in concentric bands. When a
+    // cell would outgrow a sheet the next band starts with twice as many cells around,
+    // which keeps every module a similar size instead of ballooning toward the edge.
+    cellsIn = [];
+    const limit = (S * 0.9) / (1.16 * Math.max(0.8, p.stretch));
+    let r0 = rBase;
+    let rows = 0;
+    for (let b = 0, Nb = N; b < 6 && r0 < rMax; b++, Nb = 2 * Math.round(Nb * 0.75)) {
+      const dvb = TAU / Nb;
+      const rEnd = Math.max(r0 * 1.3, limit / dvb);
+      const start = r0;
+      const map = ([u, v]) => {
+        const r = start * Math.exp(u * dvb * p.stretch);
+        const a = Math.PI / 2 - v * dvb;
+        return [r * Math.cos(a), -cy - r * Math.sin(a)];
+      };
+      let reach = r0;
+      let last = 0;
+      for (const cell of tilingCells(p.tiling, Nb, Math.log(Math.min(rEnd, rMax) / r0) / (dvb * p.stretch))) {
+        const raw = cell.verts.map(map);
+        const far = Math.max(...raw.map(([x, y]) => Math.hypot(x, y + cy)));
+        if (far > rEnd * 1.02) continue;
+        reach = Math.max(reach, far);
+        last = Math.max(last, cell.i);
+        cellsIn.push({ ...cell, raw, band: b, Nb, row: rows + cell.i });
+      }
+      rows += last + 1;
+      r0 = Math.max(reach, r0 * 1.05) + p.joint * 1.5;
+    }
   }
   const rHole = p.centre === 'none' ? 0 : ctx.rInner + 60 + (p.petals ? Math.min(p.petalLength * M, L) * 0.3 : 0);
   const shift = p.seed % MIX.length;
@@ -767,12 +777,12 @@ function buildFacade(p, ctx, holes) {
   const kept = [];
   for (const cell of cellsIn) {
     if (p.mirror && cell.cv < -1e-9) continue; // the left half is a mirror image of the right
-    const axis = p.mirror && (Math.abs(cell.cv) < 1e-9 || (!grid && Math.abs(cell.cv - N / 2) < 1e-9));
-    const raw = cell.verts.map(toXY);
+    const axis = p.mirror && (Math.abs(cell.cv) < 1e-9 || (!grid && Math.abs(cell.cv - cell.Nb / 2) < 1e-9));
+    const raw = cell.raw;
     const c = centroid(raw);
     const rc = Math.hypot(c[0], c[1] + cy);
-    const ring = grid ? Math.round(rc / gridS / 0.9) : cell.i;
-    const rng = subRng(p.seed, 'cell', cell.i, Math.round(cell.cv * 2), cell.k);
+    const ring = grid ? Math.round(rc / gridS / 0.9) : cell.row;
+    const rng = subRng(p.seed, 'cell', cell.band, cell.i, Math.round(cell.cv * 2), cell.k);
     const lim = silhouette(Math.atan2(c[0], -(c[1] + cy)));
     const edge = rc / lim;
     const erodeRoll = rng();
@@ -785,7 +795,7 @@ function buildFacade(p, ctx, holes) {
     let poly = clipHalf(raw, 0, 1, -(deckH + 30));
     if (raw.some(([x]) => Math.abs(x) > W / 2)) continue; // a module cut by the stage edge is just a fragment
     if (poly.length < 3 || area(poly) < 0.6 * area(raw) || area(poly) < 6e4) continue;
-    const keys = cell.verts.map(([u, v]) => `${Math.round(u * 50)},${Math.round(v * 50)}`);
+    const keys = cell.verts.map(([u, v]) => `${cell.band}:${Math.round(u * 50)},${Math.round(v * 50)}`);
     // cells on the centreline, against the core or standing on the deck are anchored
     const anchored = (p.mirror && raw.some(([x]) => Math.abs(x) < (grid ? gridS : 1) * 0.6 + 1)) || (!grid && cell.i === 0) || poly.length !== raw.length || raw.some(([, y]) => y > -(deckH + 30) - 1);
     kept.push({ cell, axis, raw, c, rc, ring, rng, edge, poly, keys, anchored, alive: true });
@@ -797,7 +807,7 @@ function buildFacade(p, ctx, holes) {
   kept.forEach((k, id) => {
     if (p.tiling === 'brick') k.cell.verts.forEach(([u, v], i) => {
       const [u2, v2] = k.cell.verts[(i + 1) % k.cell.verts.length];
-      k.keys.push(`${Math.round((u + u2) * 25)},${Math.round((v + v2) * 25)}`);
+      k.keys.push(`${k.cell.band}:${Math.round((u + u2) * 25)},${Math.round((v + v2) * 25)}`);
     });
     for (const key of k.keys) byPoint.set(key, [...(byPoint.get(key) || []), id]);
   });
@@ -824,8 +834,8 @@ function buildFacade(p, ctx, holes) {
     }
     sizes.push(n);
   });
-  const main = sizes.indexOf(Math.max(...sizes));
-  kept.forEach((k, id) => { if (group[id] !== main) k.alive = false; });
+  const least = Math.max(5, Math.max(...sizes) * 0.2);
+  kept.forEach((k, id) => { if (group[id] >= 0 && sizes[group[id]] < least) k.alive = false; });
 
   for (const { cell, axis, c, rc, ring, rng, edge, poly, alive } of kept) {
     if (!alive) continue;
@@ -840,7 +850,7 @@ function buildFacade(p, ctx, holes) {
     let motif = p.motif;
     if (motif === 'mixed') motif = rollMotif < p.chaos * 0.5 ? MIX[Math.floor(rollPick * MIX.length)] : MIX[(ring + shift) % MIX.length];
     // bands: concentric zones that step in depth and alternate module, so a big field has form
-    const band = Math.min(p.zones - 1, Math.floor((p.zones * Math.max(0, rc - rIn)) / Math.max(1, rOut - rIn)));
+    const band = grid ? Math.min(p.zones - 1, Math.floor((p.zones * Math.max(0, rc - rIn)) / Math.max(1, rOut - rIn))) : cell.band + Math.min(p.zones - 1, Math.floor((p.zones * Math.max(0, rc - rIn)) / Math.max(1, rOut - rIn)));
     let module = p.module === 'mix' ? (ring % 2 ? 'stepped' : 'pyramid') : p.module;
     if (band % 2) module = { stepped: 'pyramid', pyramid: 'stepped', flat: 'stepped' }[module] || module;
     const zBand = band * p.bandStep;
@@ -932,6 +942,22 @@ function petalLayers(P, p, ctx, t) {
   return out;
 }
 
+// A curled petal: the same profiles as a straight one, swept along a bending spine.
+function curledPetal(p, ctx, base, phi, len, width) {
+  const profile = p.petalShape === 'freeform' ? freeProfile(p.petalNodes) : RIBBON_PROFILES[p.petalShape] || RIBBON_PROFILES.leaf;
+  const out = [];
+  const K = p.petalLayers;
+  for (let k = 0; k < K; k++) {
+    const f = 1 - 0.2 * k;
+    const spine = makeSpine({ start: base, heading: phi, length: len * f, turn: (u) => p.petalCurl * 1.9 * (u * f) ** 1.3, step: 30 });
+    const top = k === K - 1 && K > 1;
+    const motif = p.motif === 'solid' ? 'solid' : top ? 'eyes' : k ? 'lanes' : p.ribbonMotif;
+    const pieces = ribbonParts(spine, widthOf((u) => profile(clamp(u * f, 0, 1)), width * (1 - 0.3 * k), p.petalAsym), ribbonOpts(p, ctx, motif));
+    for (const { u, ...pc } of pieces) out.push({ ...pc, t: clamp(0.35 + k * 0.25, 0, 1), el: 'petal', layer: k, organic: true, z: k });
+  }
+  return out;
+}
+
 function buildPetals(p, ctx) {
   const n = p.petals;
   if (!n) return [];
@@ -949,6 +975,12 @@ function buildPetals(p, ctx) {
     const base = [r0 * Math.sin(th), -cy - r0 * Math.cos(th)];
     const c = Math.cos(phi);
     const s = Math.sin(phi);
+    if (p.petalCurl && !axis) {
+      const made = curledPetal(p, ctx, base, phi, len, width).map(({ z, ...rest }) => ({ ...rest, frame: ctx.lift.frame(centroid(rest.points), ctx.zOf('petal') + z * step) }));
+      parts.push(...made);
+      if (p.mirror) parts.push(...made.map(mirrorPart));
+      continue;
+    }
     const raw = petalShape(len, width, axis ? 0 : p.petalAsym, p.petalShape, p.petalNodes).map(([x, y]) => [base[0] + x * c - y * s, base[1] + x * s + y * c]);
     const P = clipHalf(raw, 0, 1, -(deckH + 30));
     if (P.length < 3 || area(P) < 0.6 * area(raw)) continue;
@@ -1075,6 +1107,13 @@ function buildSpikes(p, ctx) {
     const dir = [Math.sin(th), -Math.cos(th)];
     const nrm = [dir[1], -dir[0]];
     const at = (d, k) => [dir[0] * (r0 + d) + nrm[0] * k, -cy + dir[1] * (r0 + d) + nrm[1] * k];
+    if (p.spikeCurl) {
+      const spine = makeSpine({ start: at(0, 0), heading: Math.atan2(dir[1], dir[0]), length: len, turn: (u) => p.spikeCurl * 1.7 * u ** 1.3 + 0.35 * p.spikeCurl * Math.sin(u * TAU) });
+      const made = placeRibbon(ribbonParts(spine, widthOf(RIBBON_PROFILES.flame, w, 0.25), ribbonOpts(p, ctx)), ctx, { z: ctx.zOf('spike'), el: 'spike', t: 0.9 });
+      parts.push(...made);
+      if (p.mirror) parts.push(...made.map(mirrorPart));
+      continue;
+    }
     const raw = [at(0, 0), at(len * 0.3, w / 2), at(len, 0), at(len * 0.3, -w / 2)];
     const P = clipHalf(raw, 0, 1, -(deckH + 30));
     if (P.length < 3 || area(P) < 0.6 * area(raw)) continue;
@@ -1090,31 +1129,32 @@ function buildSpikes(p, ctx) {
 
 // ------------------------------------------------------------------ tendrils
 
-const isConvex = (poly) => {
-  let sign = 0;
-  for (let i = 0; i < poly.length; i++) {
-    const [a, b, c] = [poly[i], poly[(i + 1) % poly.length], poly[(i + 2) % poly.length]];
-    const x = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
-    if (Math.abs(x) < 1e-6) continue;
-    if (sign && Math.sign(x) !== sign) return false;
-    sign = Math.sign(x);
-  }
-  return true;
+// Organic elements are ribbons (see ribbon.js): one curved outline per sheet-sized piece.
+const ribbonOpts = (p, ctx, motif) => ({
+  L: ctx.L, S: ctx.S, web: ctx.web, rim: p.rim, minSlot: ctx.fret.minSlot, minHoleR: ctx.fret.minHoleR,
+  motif: motif || (p.motif === 'solid' ? 'solid' : p.ribbonMotif), detail: p.detail, etch: p.etch, clipY: -(ctx.deckH + 30),
+});
+// Turn ribbon pieces into placed stage parts.
+function placeRibbon(pieces, ctx, { z, el, t, layer = 0, raised = false }) {
+  return pieces.map((pc) => {
+    const { u, ...rest } = pc;
+    return { ...rest, t: clamp(typeof t === 'function' ? t(u) : t, 0, 1), el, layer, raised, organic: true, frame: ctx.lift.frame(centroid(pc.points), z) };
+  });
+}
+const widthOf = (profile, w, asym = 0) => (u) => {
+  const k = (w / 2) * profile(u);
+  return [k * (1 + asym), k * (1 - asym)];
 };
 
-// Flowing horns, vines and feathers. A curved spine is cut into short convex
-// segments (each its own panel), so the whole curve is still made of flat sheet parts.
+// Flowing horns, flames, feathers and vines, each a curved ribbon cut in sheet-sized lengths.
 function buildTendrils(p, ctx) {
   const n = p.tendrils;
   if (!n) return [];
-  const { cy, deckH } = ctx;
+  const { cy } = ctx;
   const total = p.tendrilLength * M;
-  const w0 = Math.min(p.tendrilWidth * M, ctx.S);
-  const N = Math.max(6, Math.ceil(total / Math.min(ctx.L * 0.9, 520)));
-  const step = total / N;
+  const w0 = Math.min(p.tendrilWidth * M, ctx.S * 0.9);
   const z0 = ctx.zOf('tendril');
-  const opts = (ang) => ({ ...ctx.fret, ang, parity: 1, reserve: 0 });
-  const motif = p.motif === 'mixed' ? 'louvre' : p.motif;
+  const style = p.tendrilStyle;
   const parts = [];
   const add = (made) => {
     parts.push(...made);
@@ -1122,42 +1162,36 @@ function buildTendrils(p, ctx) {
   };
   for (const side of p.mirror ? [1] : [1, -1]) {
     for (let i = 0; i < n; i++) {
-      const rng = subRng(p.seed, 'tendril', i);
-      const th = ((25 + (n > 1 ? (i * 85) / (n - 1) : 40)) * Math.PI) / 180;
-      let pos = [side * ctx.rBase * 0.9 * Math.sin(th), -cy - ctx.rBase * 0.9 * Math.cos(th)];
-      const head0 = Math.atan2(-Math.cos(th), side * Math.sin(th));
-      const turn = -side * p.tendrilCurl * TAU * 0.7 * (1 - 0.12 * i);
-      const spine = [];
-      for (let k = 0; k <= N; k++) {
-        const u = k / N;
-        const h = head0 + turn * u ** 1.4;
-        spine.push({ pos, h, w: Math.max(70, w0 * (1 - u) ** 0.8), u });
-        const hm = head0 + turn * ((k + 0.5) / N) ** 1.4;
-        pos = [pos[0] + Math.cos(hm) * step, pos[1] + Math.sin(hm) * step];
+      const th = ((p.tendrilFrom + (n > 1 ? (i * p.tendrilSweep) / (n - 1) : p.tendrilSweep / 2)) * Math.PI) / 180;
+      const start = [side * ctx.rBase * 0.9 * Math.sin(th), -cy - ctx.rBase * 0.9 * Math.cos(th)];
+      const heading = Math.atan2(-Math.cos(th), side * Math.sin(th));
+      const bend = -side * p.tendrilCurl * TAU * 0.7 * (1 - 0.1 * i);
+      const wave = style === 'flame' ? -side * 0.45 : 0;
+      const turn = (u) => bend * u ** 1.4 + wave * Math.sin(u * TAU * 1.25);
+      const length = total * (1 - 0.07 * i);
+      const spine = makeSpine({ start, heading, length, turn });
+      const t = (u) => 1 - u;
+      if (style === 'vine') {
+        const stem = Math.max(160, w0 * 0.3);
+        add(placeRibbon(ribbonParts(spine, widthOf((u) => 0.45 + 0.55 * (1 - u), stem), ribbonOpts(p, ctx, 'solid')), ctx, { z: z0, el: 'tendril', t }));
+        const gap = clamp(stem * 2.6, 380, 900) / Math.max(0.25, p.tendrilLeaves);
+        let k = 0;
+        for (let s = gap * 0.6; s < length * 0.97; s += gap, k++) {
+          const q = spine[Math.min(spine.length - 1, Math.round(s / (spine[1].s - spine[0].s)))];
+          const sgn = k % 2 ? 1 : -1;
+          const len = clamp(w0 * 1.9 * (1 - 0.55 * q.u), 360, Math.min(1500, ctx.L));
+          const leaf = makeSpine({ start: [q.x - Math.sin(q.h) * sgn * stem * 0.2, q.y + Math.cos(q.h) * sgn * stem * 0.2], heading: q.h + sgn * 0.95, length: len, turn: (u) => -sgn * 0.7 * u });
+          add(placeRibbon(ribbonParts(leaf, widthOf(RIBBON_PROFILES.leaf, len * 0.44), ribbonOpts(p, ctx)), ctx, { z: z0 + 45, el: 'tendril', t: clamp(1.1 - q.u, 0, 1), layer: 1 }));
+        }
+        continue;
       }
-      const edge = (q, sgn) => [q.pos[0] - Math.sin(q.h) * q.w * 0.5 * sgn, q.pos[1] + Math.cos(q.h) * q.w * 0.5 * sgn];
-      for (let k = 0; k < N; k++) {
-        const [a, b] = [spine[k], spine[k + 1]];
-        const quad = [edge(a, 1), edge(b, 1), edge(b, -1), edge(a, -1)];
-        if (quad.some((q) => q[1] > -(deckH + 30))) break; // stop at the deck
-        if (!isConvex(quad)) continue;
-        const P = insetConvex(quad, Math.min(p.joint, 40) / 2);
-        if (P && inradius(P) > ctx.web * 0.6) {
-          add(modulePanels(P, { module: 'flat', motif, depth: 0, steps: 1, overlay: 0, overlayRoll: 1, z0, t: 1 - a.u, el: 'tendril', lift: ctx.lift, origin: [0, -cy], opts: opts(a.h) }));
-        }
-        const roll = rng();
-        if (p.tendrilStyle === 'horn' || roll > p.tendrilLeaves + (p.tendrilStyle === 'feather' ? 0.3 : 0)) continue;
-        const sides = p.tendrilStyle === 'feather' ? [1, -1] : k % 2 ? [k % 4 === 1 ? 1 : -1] : [];
-        for (const sgn of sides) {
-          const feather = p.tendrilStyle === 'feather';
-          const len = feather ? Math.min(ctx.L, w0 * (0.5 + 1.4 * (1 - a.u))) : clamp(a.w * 2.4, 320, 1300);
-          const wid = feather ? Math.min(step * 0.85, ctx.S) : len * 0.42;
-          const ang = a.h + sgn * (feather ? 1.05 : 0.9);
-          const base = edge(a, sgn * 0.6);
-          const leaf = petalShape(len, wid, 0, feather ? 'blade' : p.petalShape, p.petalNodes).map(([x, y]) => [base[0] + x * Math.cos(ang) - y * Math.sin(ang), base[1] + x * Math.sin(ang) + y * Math.cos(ang)]);
-          if (leaf.some((q) => q[1] > -(deckH + 30)) || inradius(leaf) < ctx.web) continue;
-          add(modulePanels(leaf, { module: 'flat', motif: feather ? 'solid' : 'slots', depth: 0, steps: 1, overlay: 0, overlayRoll: 1, z0: z0 + (feather ? -35 : 40), t: clamp(1.1 - a.u, 0, 1), el: 'tendril', lift: ctx.lift, origin: [0, -cy], opts: { ...opts(ang), detail: 0 } }));
-        }
+      const profile = RIBBON_PROFILES[style] || RIBBON_PROFILES.horn;
+      const asym = style === 'flame' ? 0.3 * side : 0;
+      add(placeRibbon(ribbonParts(spine, widthOf(profile, w0, asym), ribbonOpts(p, ctx)), ctx, { z: z0, el: 'tendril', t }));
+      // a narrower ribbon stood off the first gives the horn a raised spine
+      if (p.overlay > 0.3 && w0 >= 420) {
+        const over = makeSpine({ start, heading, length: length * 0.82, turn: (u) => turn(u * 0.82) });
+        add(placeRibbon(ribbonParts(over, widthOf((u) => profile(u * 0.82), w0 * 0.42, asym), ribbonOpts(p, ctx, 'eyes')), ctx, { z: z0 + Math.max(60, Math.abs(p.depth) * 0.35), el: 'tendril', t: (u) => 1.15 - u, layer: 1, raised: true }));
       }
     }
   }

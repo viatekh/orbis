@@ -61,3 +61,25 @@ export function segDist(x, y, a, b) {
   const t = clamp(((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1);
   return Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t);
 }
+
+// The tightest bounding box of a convex polygon lies along one of its edges.
+export function fitsSheet(poly, L, S) {
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len < 1e-6) continue;
+    const ux = (b[0] - a[0]) / len;
+    const uy = (b[1] - a[1]) / len;
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (const [x, y] of poly) {
+      const u = x * ux + y * uy;
+      const v = -x * uy + y * ux;
+      u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+    }
+    const w = u1 - u0;
+    const h = v1 - v0;
+    if ((w <= L && h <= S) || (w <= S && h <= L)) return true;
+  }
+  return false;
+}
